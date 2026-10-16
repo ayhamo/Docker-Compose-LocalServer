@@ -1,0 +1,22 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:2
+    container_name: uptime-kuma
+    restart: unless-stopped
+    # ports:
+    #   - 3001:3001
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Allows Uptime Kuma to monitor Docker container status directly
+    healthcheck:
+      test: ["CMD-SHELL", "node extra/healthcheck.js || exit 1"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

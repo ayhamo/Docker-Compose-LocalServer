@@ -1,0 +1,30 @@
+services:
+  snapotter:
+    image: snapotter/snapotter:latest
+    container_name: snapotter
+    restart: unless-stopped
+    # Ports commented out for Nginx Proxy Manager routing
+    # ports:
+    #   - "1349:1349"
+    networks:
+      - proxy-net
+    volumes:
+      # SSD: Database, settings, and auth stay fast on the SSD
+      - /opt/docker/snapotter/data:/data
+      # HDD: The heavy AI weights and models go to the mechanical drive
+      - /mnt/hdd/docker/snapotter/models:/data/models
+      - /mnt/hdd/docker/snapotter/ai:/data/ai
+      # HDD: The temporary editing scratchpad goes to the mechanical drive
+      - /mnt/hdd/docker/snapotter/workspace:/tmp/workspace
+    devices:
+      # Intel iGPU passthrough
+      - /dev/dri:/dev/dri
+    environment:
+      - AUTH_ENABLED=false
+      - DEFAULT_USERNAME=admin
+      # You will be prompted to change this password on your first login
+      - DEFAULT_PASSWORD=admin
+
+networks:
+  proxy-net:
+    external: true

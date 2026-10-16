@@ -1,0 +1,111 @@
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    container_name: navidrome
+    user: "1000:1000"
+    restart: unless-stopped
+    # ports:
+    #   - "4533:4533"
+    environment:
+      - ND_LOGLEVEL=info
+      - ND_PLUGINS_ENABLED=true
+      - ND_PLUGINS_AUTORELOAD=true
+      - ND_AGENTS=audiomuseai,apple-music,lastfm,deezer
+      - "ND_PID_ALBUM=folder"
+    volumes:
+      - ./navidrome-data:/data
+      - /mnt/hdd/music:/music
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:4533/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - proxy-net
+      - default
+
+  # PostgreSQL for AudioMuse-AI
+  audiomuse-postgres:
+    image: postgres:15-alpine
+    container_name: audiomuse-postgres
+    restart: unless-stopped
+    environment:
+      TZ: "Europe/Berlin"
+      POSTGRES_USER: audiomuse
+      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_DB: audiomusedb
+    volumes:
+      - ./audiomuse-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U audiomuse -d audiomusedb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+  # AudioMuse-AI Web UI (Flask)
+  audiomuse-flask:
+    image: ghcr.io/neptunehub/audiomuse-ai:latest
+    container_name: audiomuse-flask
+    restart: unless-stopped
+    # ports:
+    #   - "8000:8000"
+    environment:
+      SERVICE_TYPE: "flask"
+      TZ: "Europe/Berlin"
+      POSTGRES_USER: audiomuse
+      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_DB: audiomusedb
+      POSTGRES_HOST: audiomuse-postgres
+      POSTGRES_PORT: "5432"
+      TEMP_DIR: "/app/temp_audio"
+    volumes:
+      - ./temp-audio-flask:/app/temp_audio
+      - ./plugins-flask:/app/plugin/installed
+    depends_on:
+      audiomuse-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - proxy-net
+      - default
+
+  # AudioMuse-AI Queue Worker (Processes audio waveform analysis & AI)
+  audiomuse-worker:
+    image: ghcr.io/neptunehub/audiomuse-ai:latest
+    container_name: audiomuse-worker
+    restart: unless-stopped
+    environment:
+      SERVICE_TYPE: "worker"
+      TZ: "Europe/Berlin"
+      POSTGRES_USER: audiomuse
+      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_DB: audiomusedb
+      POSTGRES_HOST: audiomuse-postgres
+      POSTGRES_PORT: "5432"
+      TEMP_DIR: "/app/temp_audio"
+    volumes:
+      - ./temp-audio-worker:/app/temp_audio
+      - ./plugins-worker:/app/plugin/installed
+    depends_on:
+      audiomuse-postgres:
+        condition: service_healthy
+    healthcheck:
+      # The worker doesn't have a web server, so we check if the python process is running
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep python || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - default
+
+networks:
+  proxy-net:
+    external: true
+  default:
+    driver: bridge

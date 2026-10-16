@@ -1,0 +1,26 @@
+services:
+  dynacat:
+    container_name: dynacat
+    image: panonim/dynacat
+    restart: unless-stopped
+    #ports: 
+      #- "8080:8080"
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - /opt/docker/dynacat/config:/app/config
+      - /opt/docker/dynacat/assets:/app/assets
+      - /mnt/hdd:/mnt/hdd:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true
+

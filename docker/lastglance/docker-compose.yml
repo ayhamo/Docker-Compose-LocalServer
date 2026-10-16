@@ -1,0 +1,20 @@
+services:
+  lastglance:
+    image: ghcr.io/krelltunez/lastglance:latest
+    container_name: lastglance
+    restart: unless-stopped
+    # Ports commented out for Nginx Proxy Manager routing
+    # ports:
+    #   - "3000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

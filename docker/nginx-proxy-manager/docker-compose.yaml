@@ -1,0 +1,45 @@
+services:
+  nginx-proxy-manager:
+    container_name: nginx-proxy-manager
+    image: 'docker.io/jc21/nginx-proxy-manager:latest'
+    restart: unless-stopped
+    # so we have explicit logging here, but its globally defined as same as below
+    logging:
+      driver: "local"
+      options:
+        max-size: "2m"
+        max-file: "3"
+    ports:
+      - '80:80' # http
+      - '81:81' # UI port
+      - '443:443' # https
+    volumes:
+      - ./data:/data
+      - ./letsencrypt:/etc/letsencrypt
+    healthcheck:
+          # We check the admin UI port (81) to ensure the management service is responsive
+          test: ["CMD", "curl", "-f", "http://127.0.0.1:81"]
+          interval: 600s      # How often to run the check
+          timeout: 5s       # How long to wait for a response
+          retries: 3         # Number of failures before marking as "unhealthy"
+          start_period: 30s  # Wait 90s before starting checks (gives the DB time to init)
+
+    networks:
+      - proxy-net
+      
+    depends_on:
+      - error-pages
+
+  error-pages:
+    image: ghcr.io/tarampampam/error-pages:4
+    container_name: error-pages
+    restart: unless-stopped
+    environment:
+      ROTATION_MODE: random-on-each-request
+      SHOW_DETAILS: "true"
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

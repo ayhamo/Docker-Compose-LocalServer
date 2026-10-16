@@ -1,0 +1,46 @@
+name: nextcloud-aio
+
+services:
+  nextcloud-aio-mastercontainer:
+    image: ghcr.io/nextcloud-releases/all-in-one:latest
+    container_name: nextcloud-aio-mastercontainer
+    init: true
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      # 1. Storage Path on HDD
+      - NEXTCLOUD_DATADIR=/mnt/hdd/docker/nextcloud-data
+      
+      # 2. Reverse Proxy Setup (Nginx Proxy Manager)
+      - APACHE_PORT=11000
+      - APACHE_IP_BINDING=0.0.0.0
+      - SKIP_DOMAIN_VALIDATION=true
+
+      # 3. Performance, Upload, and Timeouts Tuning
+      - NEXTCLOUD_MEMORY_LIMIT=4096M
+      - NEXTCLOUD_UPLOAD_LIMIT=16G  # Default value: 10G
+      - NEXTCLOUD_MAX_TIME=3600     # Default value: 3600 (1 hour)
+
+      # 4. Intel Drivers (Preserved from original script)
+      - NEXTCLOUD_ADDITIONAL_APKS=intel-media-driver libva-intel-driver libva-utils imagemagick-svg
+
+      # 5. Automatic Backup Cleanup Policy
+      - BORG_RETENTION_POLICY=--keep-within=7d --keep-weekly=4 --keep-monthly=6  # Default value: --keep-within=7d --keep-weekly=4 --keep-monthly=6
+
+      # 6. Global Logging Rule for Child Containers must done explicitly
+      - AIO_LOGS_CUSTOM_OPTIONS=--log-driver=local --log-opt max-size=2m --log-opt max-file=2
+    
+      # - NEXTCLOUD_ENABLE_NVIDIA_GPU=true  # Default value: false (for later for Nvidia card)
+    
+    # Mount iGPU to Master Container 
+    devices:
+      - /dev/dri:/dev/dri
+      
+    volumes:
+      - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  nextcloud_aio_mastercontainer:
+    name: nextcloud_aio_mastercontainer

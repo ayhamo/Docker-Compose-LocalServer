@@ -1,0 +1,21 @@
+services:
+  imlight:
+    build:
+      context: ./Imlight/repo
+      dockerfile: Dockerfile
+    container_name: w101-imlight
+    volumes:
+      - ./Imlight/data:/app
+    tmpfs:
+      - /app/logs:size=256m
+    restart: unless-stopped
+    ports:
+      - "12000:12000"   # Login Server
+      - "12333:12333"   # Game Server (Centaur realm)
+      - "12500:12500"   # Patch Server
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':< /dev/tcp/127.0.0.1/12000'"]
+      interval: 600s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

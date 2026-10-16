@@ -1,0 +1,51 @@
+services:
+  floppy:
+    image: ghcr.io/dannyvfilms/floppy:latest
+    container_name: floppy
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - SECRET=<REDACTED_FLOPPY_SECRET>
+      - REDIS_URL=redis://redis:6379
+      - REGISTRATION=False
+      - DEMO_ACCOUNT_ENABLED=False
+      - TZ=Europe/Berlin
+    volumes:
+      - ./db:/floppy/db
+      - ./backups:/floppy/backups
+      # This line is to make anilist import work with mangaupdate as primary, with MyAnimeList as secondary fallback, mangaupdate has more metadata
+      - ./anilist.py:/floppy/integrations/imports/anilist.py:ro
+      # same logic for anilist, just for simkl
+      - ./simkl.py:/floppy/integrations/imports/simkl.py:ro
+      # shared by both importers: reports rows the remote dropped (never deletes)
+      - ./remote_removals.py:/floppy/integrations/imports/remote_removals.py:ro
+      # mirror_dry_run management command (runs an import and rolls it back)
+      - ./management:/floppy/integrations/management:ro
+    networks:
+      - proxy-net
+      - default
+    # ports:
+    #   - "8000:8000"
+
+  redis:
+    image: redis:8-alpine
+    container_name: floppy-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - ./redis-data:/data
+    networks:
+      - default
+
+networks:
+  proxy-net:
+    external: true
+  default:
+    driver: bridge

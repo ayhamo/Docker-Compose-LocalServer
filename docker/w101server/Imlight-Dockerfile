@@ -1,0 +1,22 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY . .
+RUN find . -name "global.json" -type f -delete
+RUN dotnet publish src/Imlight.Director/Imlight.Director.csproj -c Release -o /app/publish
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0
+WORKDIR /app
+COPY --from=build /app/publish /app-build
+
+RUN echo '#!/bin/sh' > /usr/local/bin/entrypoint.sh && \
+    echo 'if [ ! -f /app/Imlight.Director.dll ]; then' >> /usr/local/bin/entrypoint.sh && \
+    echo '    echo "Initializing server files in persistent storage..."' >> /usr/local/bin/entrypoint.sh && \
+    echo '    cp -r /app-build/* /app/' >> /usr/local/bin/entrypoint.sh && \
+    echo 'fi' >> /usr/local/bin/entrypoint.sh && \
+    echo 'cd /app' >> /usr/local/bin/entrypoint.sh && \
+    echo 'echo "Starting server binary: Imlight.Director.dll..."' >> /usr/local/bin/entrypoint.sh && \
+    echo 'exec dotnet Imlight.Director.dll' >> /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 12000
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

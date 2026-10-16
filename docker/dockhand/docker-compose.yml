@@ -1,0 +1,19 @@
+services:
+  dockhand:
+    image: fnsys/dockhand:latest
+    container_name: dockhand
+    restart: unless-stopped
+    # Emergency fallback port:
+    # ports:
+    #   - "3000:3000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/app/data
+      # Mapping the root docker dir so Dockhand can see your compose files
+      - /opt/docker:/opt/docker
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

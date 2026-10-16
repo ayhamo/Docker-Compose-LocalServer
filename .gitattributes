@@ -1,0 +1,2 @@
+# Files run on Linux: always keep LF line endings
+* text=auto eol=lf

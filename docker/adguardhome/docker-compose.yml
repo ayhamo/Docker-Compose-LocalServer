@@ -1,0 +1,69 @@
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardHome
+    restart: unless-stopped
+    hostname: ayham
+    # RECOMMENDED: Uses your host's native network stack. 
+    # This automatically opens all required IPv4 & IPv6 ports below.
+    network_mode: host
+    # ALTERNATIVE: If you ever comment out host mode and want standard bridge mode,
+    # you must uncomment the ports section below. Note: IPv6 will require extra host OS tweaks.
+    # ports:
+    #   - "53:53/tcp"    # Plain DNS
+    #   - "53:53/udp"    # Plain DNS
+    #   - "3000:3000/tcp" # Initial Setup Web UI Wizard
+    #   - "80:80/tcp"    # Post-Setup Web UI Dashboard Dashboard
+    #   - "853:853/tcp"  # DNS-over-TLS (For your Android phone)
+    #   - "784:784/udp"  # DNS-over-QUIC (Optional future protocol)
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      # Stores your internal filters and web user interface dashboard settings
+      - /opt/docker/adguardhome/conf:/opt/adguardhome/conf
+      # Stores persistent runtime metrics and core database components
+      - /opt/docker/adguardhome/work:/opt/adguardhome/work
+      # gives AdGuard read-only access to the TLS cert and key
+      - /opt/docker/adguardhome/certs:/opt/adguardhome/certs:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://127.0.0.1:8443/"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  
+  cert-sync:
+    image: alpine:latest
+    container_name: adguard-cert-sync
+    restart: unless-stopped
+    volumes:
+      # Read Nginx Proxy Manager certificates
+      - /opt/docker/nginx-proxy-manager/letsencrypt:/npm-certs:ro
+      # Write to AdGuard certs directory
+      - /opt/docker/adguardhome/certs:/adguard-certs
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "while true; do
+      
+        if [ -f /npm-certs/live/npm-5/fullchain.pem ] && [ -f /npm-certs/live/npm-5/privkey.pem ]; then
+          cp -L /npm-certs/live/npm-5/fullchain.pem /adguard-certs/fullchain.pem;
+          cp -L /npm-certs/live/npm-5/privkey.pem /adguard-certs/privkey.pem;
+          chmod 644 /adguard-certs/fullchain.pem;
+          chmod 600 /adguard-certs/privkey.pem;
+          date +%s > /adguard-certs/.last_sync;
+          echo \"[$$(date)] SUCCESS: SSL certificates synchronized from NPM.\";
+        else
+          echo \"[$$(date)] ERROR: Files missing. Listing /npm-certs contents:\";
+          ls -la /npm-certs;
+          ls -la /npm-certs/live/npm-5 2>/dev/null || true;
+        fi;
+
+        sleep 3600 & wait $${!};
+      done"
+    healthcheck:
+      # Checks if the sync file exists and was modified within the last 65 minutes
+      test: ["CMD-SHELL", "find /adguard-certs/.last_sync -mmin -65 | grep -q . || exit 1"]
+      interval: 59m
+      timeout: 5s
+      retries: 3
+      start_period: 30s

@@ -1,0 +1,40 @@
+services:
+  backrest:
+    image: garethgeorge/backrest:latest
+    container_name: backrest
+    hostname: backrest
+    restart: unless-stopped
+        
+    # NO ports published to the host!
+    # Communicates with Nginx via Docker network
+    #ports:
+    #  - "9898:9898"
+
+    environment:
+      - BACKREST_DATA=/data # path for backrest data. restic binary and the database are placed here.
+      - BACKREST_CONFIG=/config/config.json # path for the backrest config file.
+      - XDG_CACHE_HOME=/cache # path for the restic cache which greatly improves performance.
+      - TZ=Europe/Berlin # set the timezone for the container, used as the timezone for cron jobs.
+
+    volumes:
+      - ./data:/data
+      - ./config:/config
+      - ./cache:/cache
+      # - ./tmp:/tmp # [optional] path for temporary files
+      # - ./rclone:/root/.config/rclone # [optional] mount for rclone config when using rclone remotes
+      - /opt/docker:/opt/docker:ro # Changed from /userdata to /opt/docker # Mount local path to backup here (read-only for security)
+      # - /MY-REPOS:/repos # [optional] mount repos if using local storage, not necessary for remotes e.g. B2, S3, etc.
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9898/"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

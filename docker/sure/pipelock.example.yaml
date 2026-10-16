@@ -1,0 +1,105 @@
+# Pipelock configuration for Docker Compose
+# See https://github.com/luckyPipewrench/pipelock for full options.
+#
+# This file is validated in CI with Pipelock 3.4.0. See the release changelog
+# for the full control surface and upgrade notes.
+# Run `pipelock assess init --config <file>` to create an assessment workspace.
+# Run `pipelock audit score --config <file>` for a security posture score (0-100).
+# Run `pipelock doctor` to verify configured protections are actually enforceable.
+
+version: 1
+mode: balanced
+
+# Trusted domains: allow services whose public DNS resolves to private IPs.
+# Prevents SSRF scanner from blocking legitimate internal traffic.
+# trusted_domains:
+#   - "api.internal.example.com"
+#   - "*.corp.example.com"
+
+forward_proxy:
+  enabled: true
+  max_tunnel_seconds: 300
+  idle_timeout_seconds: 60
+
+websocket_proxy:
+  enabled: false
+  max_message_bytes: 1048576
+  max_concurrent_connections: 128
+  scan_text_frames: true
+  allow_binary_frames: false
+  forward_cookies: false
+  strip_compression: true
+  max_connection_seconds: 3600
+  idle_timeout_seconds: 300
+  origin_policy: rewrite
+
+dlp:
+  scan_env: true
+  include_defaults: true
+
+response_scanning:
+  enabled: true
+  action: warn
+  include_defaults: true
+
+mcp_input_scanning:
+  enabled: true
+  action: block
+  on_parse_error: block
+
+mcp_tool_scanning:
+  enabled: true
+  action: warn
+  detect_drift: true
+
+mcp_tool_policy:
+  enabled: false
+  action: warn
+  # Redirect profiles: route matched tool calls to audited handler programs
+  # instead of blocking. The handler returns a synthetic MCP response.
+  # redirect_profiles:
+  #   safe-fetch:
+  #     exec: ["/pipelock", "internal-redirect", "fetch-proxy"]
+  #     reason: "Route fetch calls through audited proxy"
+
+mcp_session_binding:
+  enabled: true
+  unknown_tool_action: warn
+
+tool_chain_detection:
+  enabled: true
+  action: warn
+  window_size: 20
+  max_gap: 3
+
+# Request body scanning covers cleartext HTTP, reverse-proxy, and WebSocket
+# bodies. It cannot inspect encrypted HTTPS tunnel bodies unless TLS
+# interception is separately configured and its CA trusted by the client.
+# In enforce mode, prompt-injection findings hard-block non-provider
+# destinations even when action is "warn". Trusted provider hosts (OpenAI,
+# Anthropic, etc.) remain exempt via the response_scanning exemption list.
+request_body_scanning:
+  enabled: true
+  action: warn
+  max_body_bytes: 5242880
+  scan_headers: true
+  header_mode: sensitive
+
+# Health watchdog (pipelock 2.4+): /health returns 503 when any subsystem
+# heartbeat goes stale. Enabled by default; set expose_subsystems true to
+# include a per-subsystem boolean map in /health responses.
+health_watchdog:
+  enabled: true
+  interval_seconds: 2
+  expose_subsystems: false
+
+# Flight recorder (pipelock 2.7+): signed, hash-chained action receipts.
+# Enabled by default, but inert until both `dir` and `signing_key_path` are set.
+# For Docker Compose, mount ./pipelock-evidence and ./pipelock-keys as shown in
+# compose.example.ai.yml, then uncomment these paths.
+flight_recorder:
+  enabled: true
+  require_receipts: false
+  redact: true
+  # dir: /var/lib/pipelock/evidence
+  # signing_key_path: /etc/pipelock/keys/flight-recorder-signing.key

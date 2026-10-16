@@ -1,0 +1,39 @@
+services:
+  gptwol:
+    container_name: gptwol
+    image: misterbabou/gptwol:latest
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - TZ=Europe/Berlin #Set your timezone for Cron; default is UTC
+      - PORT=5000 #Free Port on Your host; default is 5000
+      #- IP=0.0.0.0 #App listening IPV4 or IPV6 (ex [::]) address; default is 0.0.0.0
+      #- LOG_LEVEL=INFO #Can be DEBUG, INFO, WARN or ERROR
+      #- ENABLE_LOGIN=false # Enable or disable local login; You would be able to access with USERNAME and PASSWORD; default is false
+      #- USERNAME=admin # Set a username; default is admin
+      #- PASSWORD=admin # Set a password; default is admin
+      #- OIDC_ENABLED=false # Enable OIDC LOGIN; default is false
+      #- OIDC_ISSUER=https://auth.exemple.com #  Base URL of the OIDC server - Should not include the `/.well-known/openid-configuration` part and no trailing `/`; default is not set
+      #- OIDC_CLIENT_ID=oidcclientid # Your OIDC client ID; default is not set
+      #- OIDC_CLIENT_SECRET=oidcclientsecret # Your OIDC Client Secret; default is not set
+      #- OIDC_REDIRECT_URI=http(s)://urlofyourgptwol(:port) # Base URL of your GPTWOL instance; default is not set 
+      #- SCRIPT_NAME=/my-app # Uncomment this line to run the app under a prefix; default is not set
+      #- ENABLE_ADD_DEL=true # Enable or disable ADD computer and Delete computer buttons; default is true
+      #- ENABLE_REFRESH=true # Enable or disable automatic status refresh; default is true
+      - REFRESH_INTERVAL=30 # Uncomment to change time between each status check for icmp, arp or tcp, can (in s); default value is 30 seconds
+      #- PING_TIMEOUT=300 #Uncomment to change the time to wait for a ping answer in (in ms); default value is 300 milliseconds
+      #- ARP_INTERFACE=eth0 #Uncomment this line to set an arp interface manually for scan and test; default is not set
+      #- ARP_TIMEOUT=300 #Uncomment to change the time to wait for a arp answer (in ms); default value is 300 milliseconds
+      #- TCP_TIMEOUT=1 #Uncomment to change the time to wait for a tcp check (in s);  default value 1 second
+      #- ENABLE_L2_WOL_PACKET=false # Enable L2 WOL packet instead of L4, default is false
+      #- L2_INTERFACE=eth0 # Set the default interface for L2 WOL (set this only if you set ENABLE_L2_WOL_PACKET to true), default is eth0
+    volumes:
+      - ./appdata/db:/app/db
+      - ./appdata/cron:/etc/cron.d
+      
+    healthcheck:
+      test: ["CMD-SHELL", "[ -S /root/.gunicorn/gunicorn.ctl ] || exit 1"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

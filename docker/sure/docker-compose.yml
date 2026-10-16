@@ -1,0 +1,137 @@
+# ===========================================================================
+# Example Docker Compose file with Groq (Cloud LLM - not added here to make them editable in UI), and Pipelock (agent security proxy)
+# ===========================================================================
+x-db-env: &db_env
+  POSTGRES_USER: ${POSTGRES_USER:-sure_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-<REDACTED_SURE_DB_PASSWORD>}
+  POSTGRES_DB: ${POSTGRES_DB:-sure_production}
+
+x-rails-env: &rails_env
+  <<: *db_env
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE:-<REDACTED_SECRET_KEY_BASE>}
+  SELF_HOSTED: "true"
+  RAILS_FORCE_SSL: "false"
+  RAILS_ASSUME_SSL: "true" # Set to true because Nginx Proxy Manager handles your HTTPS 
+  DB_HOST: db
+  DB_PORT: 5432
+  REDIS_URL: redis://redis:6379/1
+  
+  # --- Pipelock Security Routing ---
+  HTTPS_PROXY: "http://pipelock:8888"
+  HTTP_PROXY: "http://pipelock:8888"
+  # Ensures internal traffic doesn't get routed through the security proxy
+  NO_PROXY: "db,redis,pipelock,localhost,127.0.0.1"
+
+
+services:
+  pipelock:
+    image: ghcr.io/luckypipewrench/pipelock:3.4.0@sha256:2e6caa43967a5ef19cacbce00188d829c1b5de1eb0ad304a51d2085f32c5694c
+    user: "1000:1000"
+    container_name: sure-pipelock
+    restart: unless-stopped
+    volumes:
+      - ./pipelock.example.yaml:/etc/pipelock/pipelock.yaml:ro
+    command:
+      - "run"
+      - "--config"
+      - "/etc/pipelock/pipelock.yaml"
+      - "--listen"
+      - "0.0.0.0:8888"
+    healthcheck:
+      test: ["CMD", "/pipelock", "healthcheck", "--addr", "127.0.0.1:8888"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - sure_net
+
+  web:
+    image: ghcr.io/we-promise/sure:stable
+    container_name: sure-web
+    restart: unless-stopped
+    volumes:
+      - ./app-storage:/rails/storage
+    # Ports commented out for Nginx Proxy Manager routing
+    # ports:
+    #   - ${PORT:-3000}:3000
+    environment:
+      <<: *rails_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pipelock:  
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:3000/up || exit 1"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - sure_net
+      - proxy-net
+
+  worker:
+    image: ghcr.io/we-promise/sure:stable
+    container_name: sure-worker
+    command: bundle exec sidekiq
+    restart: unless-stopped
+    volumes:
+      - ./app-storage:/rails/storage
+    environment:
+      <<: *rails_env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      pipelock:  
+        condition: service_healthy
+    healthcheck:
+      # Verifies the Sidekiq background processing daemon is actively running
+      test: ["CMD-SHELL", "ps aux | grep '[s]idekiq' || exit 1"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - sure_net
+
+  db:
+    image: pgvector/pgvector:pg16-trixie
+    container_name: sure-db
+    restart: unless-stopped
+    volumes:
+      - ./postgres-data:/var/lib/postgresql/data
+    environment:
+      <<: *db_env
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sure_net
+
+  redis:
+    image: redis:latest
+    container_name: sure-redis
+    restart: unless-stopped
+    volumes:
+      - ./redis-data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sure_net
+
+networks:
+  sure_net:
+    driver: bridge
+  proxy-net:
+    external: true
