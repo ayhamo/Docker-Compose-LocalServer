@@ -31,6 +31,11 @@ services:
       - error-pages
 
   error-pages:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     image: ghcr.io/tarampampam/error-pages:4
     container_name: error-pages
     restart: unless-stopped

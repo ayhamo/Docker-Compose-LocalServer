@@ -168,7 +168,7 @@ Go to **Settings** → **Encryption settings**:
 | Certificate | *Set a certificates file path* → `/opt/adguardhome/certs/fullchain.pem` |
 | Private key | *Set a private key file* → `/opt/adguardhome/certs/privkey.pem` |
 
-The container healthcheck turns **healthy** only after this is saved, because it probes `https://127.0.0.1:8443`. cert-sync copies the renewed cert every hour; restart AdGuard occasionally (or after a renewal) to load the new one.
+The container healthcheck turns **healthy** only after this is saved, because it probes `https://127.0.0.1:8443`. cert-sync copies the renewed cert every hour, but AdGuard only loads it on restart. `cert-reload.sh` handles that: it compares the synced cert with the one AdGuard serves on 853 and restarts AdGuard when they differ. Schedule it in step 6. If your domain isn't `yourdomain.dedyn.io`, fix the `-servername` in the script.
 
 ### 3.4 Local DNS for your domain
 
@@ -207,9 +207,11 @@ Containers on `proxy-net` are reached by **container name**. Host-network apps a
 | dash | `dynacat` | 8080 |
 | lastglance | `lastglance` | 80 |
 | pdf | `bentopdf` | 8080 |
-| tools | `omni-tools` | 80 |
 | snapotter | `snapotter` | 1349 |
-| desktop | `vdesktop` | 3000 |
+| smart-plug | `smart-plug` | 8080 |
+| radio | `radio-relay` | 8080 |
+
+Radio streams are then `https://radio.yourdomain.dedyn.io/<station>.mp3` (station names are in `navidrome/radio-relay/relay.py`); add them in Navidrome under **Radios**.
 
 For **Nextcloud**, paste the contents of [`docker/nextcloud-aio/nextcloud custom nginx config.txt`](docker/nextcloud-aio/nextcloud%20custom%20nginx%20config.txt) into the proxy host's **Advanced** → *Custom Nginx Configuration*.
 
@@ -223,22 +225,40 @@ Every app is started with `cd /opt/docker/<app> && docker compose up -d`. Order 
 
 | App | Before `up -d` |
 |---|---|
-| **dockhand, uptime-kuma, backrest, bentopdf, omni-tools, lastglance, dynacat** | Nothing; just start them. Dynacat mounts `/mnt/hdd` read-only, so adjust that path if needed. |
+| **dockhand, uptime-kuma, backrest, bentopdf, lastglance, dynacat** | Nothing; just start them. Dynacat mounts `/mnt/hdd` read-only, so adjust that path if needed. |
 | **floppy** | Set `SECRET=` to a long random string (`openssl rand -hex 32`). In `anilist.py`, fill in `MANGAUPDATES_USERNAME`/`MANGAUPDATES_PASSWORD`, or leave them empty if you don't import from MangaUpdates. |
 | **immich** | `cp .env.example .env` and set `DB_PASSWORD` (letters and digits only) and `UPLOAD_LOCATION`. Fix the Nextcloud photos mount path and `/mnt/hdd/docker/immich-ai-models`. Start it, create the admin user, then create an **API key** in Immich and put it into `IMMICH_API_KEY` (immich-drop). Set `ADMIN_PASSWORD`, then `docker compose up -d immich-drop`. |
-| **navidrome** | Replace `<REDACTED_AUDIOMUSE_DB_PASSWORD>` in all **three** places with the same value. Run `mkdir -p navidrome-data && sudo chown 1000:1000 navidrome-data` (the container runs as UID 1000). Point `/mnt/hdd/music` at your library. |
+| **navidrome** | Replace `<REDACTED_AUDIOMUSE_DB_PASSWORD>` in all **three** places with the same value. Run `mkdir -p navidrome-data && sudo chown 1000:1000 navidrome-data` (the container runs as UID 1000). Point `/mnt/hdd/music` at your library. `cp .env.example .env` and fill in a [Last.fm API account](https://www.last.fm/api/account/create) (`LASTFM_APIKEY`, `LASTFM_SECRET`). `radio-relay` is built locally on the first `up -d`. |
 | **sparky-fitness** | `cp .env.example .env` and fill every `<CHANGE_ME…>` (`openssl rand -hex 32` for the two keys). Set `SPARKY_FITNESS_FRONTEND_URL` to your real `https://fitness.yourdomain.dedyn.io`. |
-| **sure** | Create a `.env` with `SECRET_KEY_BASE=$(openssl rand -hex 64)` and `POSTGRES_PASSWORD=…`, or replace the `<REDACTED_…>` defaults in the compose. `pipelock.example.yaml` must sit next to the compose (it does). |
+| **sure** | Create a `.env` with `SECRET_KEY_BASE=$(openssl rand -hex 64)` and `POSTGRES_PASSWORD=…`, or replace the `<REDACTED_…>` defaults in the compose. `pipelock.example.yaml` must sit next to the compose (it does), and so must `overrides/`. For the nightly dump, schedule `backup-db.sh` (step 6); to report it to Uptime Kuma, put a push monitor URL in `backups/.kuma-push-url`. |
 | **snapotter** | Create `/mnt/hdd/docker/snapotter/{models,ai,workspace}`, or change the paths. Needs `/dev/dri`. |
 | **nextcloud-aio** | Fix `NEXTCLOUD_DATADIR`. Don't rename the container or volume, because AIO depends on those names. Start it, open `https://<SERVER-IP>:8080`, save the passphrase **somewhere safe outside the repo**, and enter `nextcloud.yourdomain.dedyn.io` as the domain. Remove `NEXTCLOUD_ADDITIONAL_APKS`/`devices` if there is no Intel iGPU. |
 | **gptwol** | Nothing (host network, port 5000). Enable `ENABLE_LOGIN` if it's reachable from outside your LAN. |
-| **vdesktop** | Built locally: `./deploy.sh` (or `docker compose up -d --build`). |
+| **smart-plug** | Built locally (`docker compose up -d --build`). Before the first start, get the plug's Tuya local key and create `data/config.json`, as described in `smart-plug/README.md`. `data/` holds that key, so never commit it. |
 | **evejs** | Not a plain `up -d`. Put the EVE.js release `.zip` in the folder and run `./manage.sh`, choosing **f** for a fresh install. The script patches `compose.yaml` and builds the image. In its final message, replace `192.168.0.214` with `<SERVER-IP>`. |
 | **w101server** | Not a plain `up -d`. Edit `SERVER_IP=` in `setup.sh`, place your wiztype `.json` type dump next to it, then run `./setup.sh`. It clones and builds Imlight and writes the compose. |
 
 ---
 
-## 6. Check everything
+## 6. Scheduled jobs
+
+Both scripts run as your user (who is in the `docker` group) and finish before Backrest's nightly backup at 03:15, so the backup always holds a fresh Sure dump. Add them with `crontab -e`:
+
+```cron
+# AdGuard: load the renewed cert (if NPM renewed it)
+30 2 * * * /opt/docker/adguardhome/cert-reload.sh >> /opt/docker/adguardhome/cert-reload.log 2>&1
+# Sure database dump before Backrest (03:15)
+50 2 * * * /opt/docker/sure/backup-db.sh >> /opt/docker/sure/backups/backup-db.log 2>&1
+```
+
+```bash
+chmod +x /opt/docker/adguardhome/cert-reload.sh /opt/docker/sure/backup-db.sh
+mkdir -p /opt/docker/sure/backups
+```
+
+---
+
+## 7. Check everything
 
 ```bash
 docker ps --format 'table {{.Names}}\t{{.Status}}' | sort

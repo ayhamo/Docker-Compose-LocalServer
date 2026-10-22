@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Plug</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB2ZXJzaW9uPSIxLjIiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDE1MTIgMTUxMiIgd2lkdGg9IjE1MTIiIGhlaWdodD0iMTUxMiI+Cgk8dGl0bGU+VFVZQS0wNWZhNDczZS1zdmc8L3RpdGxlPgoJPHN0eWxlPgoJCS5zMCB7IGZpbGw6ICNmZjQ4MDAgfSAKCQkuczEgeyBmaWxsOiAjZmZmZmZmIH0gCgk8L3N0eWxlPgoJPGcgaWQ9IiNmZjQ4MDBmZiI+CgkJPHBhdGggaWQ9IkxheWVyIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiIGNsYXNzPSJzMCIgZD0ibTAgMGgxNTEydjE1MTJoLTE1MTJ6bTk4OS41IDI1MS43Yy0xMyAyLjItMjMgMTQuMy0yMy43IDI3LjMtMC40IDUuNyAxLjIgMTEuNCAzLjkgMTYuNCA1LjEgOC45IDE1LjIgMTQuNiAyNS40IDE0LjggMTMgMC40IDI2LjEgMSAzOC45IDMuNyAyMi4zIDQuMSA0My44IDEyLjUgNjMuNiAyMy42IDE2IDkgMzAuNyAyMC4zIDQzLjYgMzMuNCAyOS45IDI5LjIgNDkuOCA2OC4yIDU3LjIgMTA5LjIgMi40IDEyLjkgMi45IDI2IDMuOCAzOSAwLjYgMTAuNSA3LjYgMjAuMyAxNy4zIDI0LjUgNS44IDIuNCAxMi4zIDMuNCAxOC40IDEuOCA5LjMtMS45IDE3LjItOC45IDIwLjgtMTcuNyAyLjktNi41IDEuOS0xMy44IDEuNy0yMC43LTEuNy01NS4yLTIxLjYtMTA5LjQtNTUuNC0xNTMtMjIuOC0yOS4xLTUxLjYtNTMuNi04NC4zLTcxLTMzLjgtMTguNS03MS44LTI5LjEtMTEwLjItMzEuMi03LTAuNC0xNC4xLTEuNS0yMS0wLjF6bS00MTggNDQuNmMtMjguOCAxMi4zLTUxLjIgNDAuMi01NC4yIDcxLjctMS4xIDQwLjgtMC4xIDgxLjctMC42IDEyMi42LTE4LjIgMC4xLTM3LTEuNS01NC42IDQuNS0yNS41IDguNS00Ni40IDI5LjQtNTUuMyA1NC43LTYuOCAxOS4yLTYuNyA0MC44IDAuMyA2MCA1LjcgMTUuOSAxNi41IDI5LjggMjkuOSA0MC4xIDkuNSA3LjggMjEgMTIuOCAzMi45IDE1LjYgMTUuNCAzLjMgMzEuMyAyLjMgNDYuOSAyLjVxMCA4MSAwIDE2MmMwLjIgMjIuNi0wLjYgNDUuNCAxLjEgNjggNC4xIDUzIDE5LjcgMTA1LjMgNDcuMiAxNTAuOSAyOCA0OC44IDY4LjIgOTAuMiAxMTUuMyAxMjAuNiA1NS44IDM2LjMgMTIyLjEgNTYgMTg4LjYgNTUuOCAxNyAwLjcgMzQgMCA1MSAwLjJxMTguNSAwIDM3IDBjMTguMyAwLjIgMzcuMi00LjYgNTIuMi0xNS41IDcuOC01LjYgMTUuMS0xMiAyMC44LTE5LjggMTMuMy0xNi44IDE5LjctMzguOSAxNy45LTYwLjItMS4yLTE3LjItNy42LTM0LTE4LjQtNDcuNC0xMi44LTE1LjktMzAuNi0yOC4yLTUwLjctMzIuNC05LjItMi4xLTE4LjUtMi0yNy44LTIuMi0yNy40LTAuMS01NC43IDAuMi04Mi0wLjItNDMuNC0wLjEtODYuMi0xNy42LTExOC00Ni45LTE0LTEzLjMtMjYuNS0yOC40LTM1LjUtNDUuNS0xMS40LTIwLjgtMTguMi00My45LTIwLjYtNjcuNC0xLjItMTItMC44LTI0LTAuOS0zNi0wLjEtNjEuMyAwLTEyMi43IDAtMTg0cTEwNCAwIDIwOCAwYzE0LTAuMyAyOC4zLTMuMSA0MC40LTEwLjQgMTcuNC0xMS4yIDI5LjMtMjkuNiAzNC4yLTQ5LjUgMy44LTE1LjIgNS0zMS40IDEuOC00Ni45LTUuNC0yNi44LTI0LjQtNDkuOS00OC43LTYyLTExLjYtNS45LTI0LjctOC42LTM3LjctOC40LTY2LTAuNC0xMzEuOS0wLjMtMTk3LjktMC4yLTAuNS0zNy4yIDAuNC03NC40LTAuNC0xMTEuNiAwLjItNy4xLTAuOC0xNC4xLTIuMi0yMS4xLTcuOC0zMy40LTM2LjUtNjAuOS03MC40LTY3LjEtMTYuNi0yLjktMzQuMS0xLjMtNDkuNiA1LjV6bTQyMCA3My4zYy0xMy4zIDEuNC0yNC40IDEzLjEtMjUuNiAyNi40LTAuOSA3LjYgMS44IDE1LjIgNi40IDIxLjIgNS45IDcuMyAxNS40IDExLjIgMjQuNyAxMS4xIDE3LjItMC4xIDM0LjIgNS43IDQ4LjEgMTUuNyAyMC43IDE0IDM1LjEgMzcuMiAzOCA2Mi4xIDAuOCA3LjcgMC4yIDE1LjkgMy42IDIzLjEgNS4xIDExLjcgMTguNyAxOC42IDMxLjIgMTYuNyA5LjgtMS41IDE4LjYtOC40IDIyLjQtMTcuNiAzLjQtNi45IDIuMy0xNC44IDEuOS0yMi4yLTEuNy0yNC41LTkuNy00OC42LTIzLjEtNjkuMi0yMy41LTM2LjYtNjMuOS02MS44LTEwNy4yLTY2LjUtNi44LTAuNy0xMy42LTEuOC0yMC40LTAuOHoiLz4KCTwvZz4KCTxnIGlkPSIjZmZmZmZmZmYiPgoJCTxwYXRoIGlkPSJMYXllciIgY2xhc3M9InMxIiBkPSJtOTg5LjUgMjUxLjdjNi45LTEuNCAxNC0wLjMgMjEgMC4xIDM4LjQgMi4xIDc2LjQgMTIuNyAxMTAuMiAzMS4yIDMyLjcgMTcuNCA2MS41IDQxLjkgODQuMyA3MSAzMy44IDQzLjYgNTMuNyA5Ny44IDU1LjQgMTUzIDAuMiA2LjkgMS4yIDE0LjItMS42IDIwLjctMy43IDguOC0xMS42IDE1LjgtMjAuOSAxNy43LTYuMSAxLjYtMTIuNiAwLjYtMTguNC0xLjgtOS43LTQuMi0xNi43LTE0LTE3LjMtMjQuNS0wLjktMTMtMS40LTI2LjEtMy44LTM5LTcuNC00MS0yNy4zLTgwLTU3LjItMTA5LjItMTIuOS0xMy4xLTI3LjYtMjQuNC00My42LTMzLjQtMTkuOC0xMS4xLTQxLjMtMTkuNS02My42LTIzLjYtMTIuOC0yLjctMjUuOS0zLjMtMzguOS0zLjctMTAuMi0wLjItMjAuMy01LjktMjUuNC0xNC44LTIuNy01LTQuMy0xMC43LTMuOS0xNi40IDAuNy0xMyAxMC43LTI1LjEgMjMuNy0yNy4zeiIvPgoJCTxwYXRoIGlkPSJMYXllciIgY2xhc3M9InMxIiBkPSJtNTcxLjUgMjk2LjNjMTUuNS02LjggMzMtOC40IDQ5LjYtNS41IDMzLjkgNi4yIDYyLjYgMzMuNyA3MC40IDY3LjEgMS40IDcgMi40IDE0IDIuMiAyMS4xIDAuOCAzNy4yLTAuMSA3NC40IDAuNCAxMTEuNiA2Ni0wLjEgMTMxLjktMC4yIDE5Ny45IDAuMSAxMy0wLjEgMjYuMSAyLjYgMzcuNyA4LjUgMjQuMyAxMi4xIDQzLjMgMzUuMiA0OC43IDYyIDMuMiAxNS41IDIgMzEuNy0xLjggNDYuOS00LjkgMTkuOS0xNi44IDM4LjMtMzQuMiA0OS41LTEyLjEgNy4zLTI2LjQgMTAuMS00MC40IDEwLjRxLTEwNCAwLTIwOCAwYzAgNjEuMy0wLjEgMTIyLjcgMCAxODQgMC4xIDEyLTAuMyAyNCAwLjkgMzYgMi4zIDIzLjUgOS4yIDQ2LjYgMjAuNiA2Ny40IDkgMTcuMSAyMS41IDMyLjIgMzUuNSA0NS41IDMxLjggMjkuMyA3NC42IDQ2LjggMTE4IDQ2LjkgMjcuMyAwLjQgNTQuNiAwLjEgODIgMC4yIDkuMyAwLjIgMTguNiAwLjEgMjcuOCAyLjIgMjAuMSA0LjIgMzcuOSAxNi41IDUwLjcgMzIuNCAxMC44IDEzLjQgMTcuMiAzMC4yIDE4LjQgNDcuNCAxLjggMjEuMy00LjYgNDMuNC0xNy45IDYwLjItNS43IDcuOC0xMyAxNC4yLTIwLjggMTkuOC0xNSAxMC45LTMzLjkgMTUuNy01Mi4yIDE1LjVxLTE4LjUgMC0zNyAwYy0xNy0wLjItMzQgMC41LTUxLTAuMi02Ni41IDAuMi0xMzIuOC0xOS41LTE4OC42LTU1LjgtNDcuMS0zMC40LTg3LjMtNzEuOC0xMTUuMy0xMjAuNi0yNy41LTQ1LjYtNDMuMS05Ny45LTQ3LjItMTUwLjktMS43LTIyLjYtMC45LTQ1LjQtMS4xLTY4cTAtODEgMC0xNjJjLTE1LjYtMC4yLTMxLjUgMC43LTQ2LjktMi41LTExLjktMi44LTIzLjQtNy44LTMyLjktMTUuNi0xMy40LTEwLjMtMjQuMi0yNC4yLTMwLTQwLjEtNi45LTE5LjItNy00MC44LTAuMi02MCA4LjktMjUuMyAyOS44LTQ2LjIgNTUuMy01NC43IDE3LjYtNiAzNi40LTQuNCA1NC42LTQuNSAwLjUtNDAuOS0wLjUtODEuOCAwLjYtMTIyLjYgMy0zMS41IDI1LjQtNTkuNCA1NC4yLTcxLjd6Ii8+CgkJPHBhdGggaWQ9IkxheWVyIiBjbGFzcz0iczEiIGQ9Im05OTEuNSAzNjkuNmM2LjgtMSAxMy42IDAuMSAyMC40IDAuOCA0My4zIDQuNyA4My43IDI5LjkgMTA3LjIgNjYuNSAxMy40IDIwLjYgMjEuNCA0NC42IDIzLjEgNjkuMSAwLjQgNy41IDEuNSAxNS40LTEuOSAyMi4zLTMuOCA5LjItMTIuNiAxNi4xLTIyLjQgMTcuNi0xMi41IDEuOS0yNi4xLTUtMzEuMi0xNi43LTMuNC03LjItMi44LTE1LjQtMy42LTIzLjEtMi45LTI0LjktMTcuMy00OC4xLTM4LTYyLjEtMTMuOS0xMC0zMC45LTE1LjgtNDguMS0xNS43LTkuMyAwLjEtMTguOC0zLjgtMjQuNy0xMS4xLTQuNi02LTcuMy0xMy43LTYuNC0yMS4yIDEuMi0xMy4zIDEyLjItMjUgMjUuNi0yNi40eiIvPgoJPC9nPgo8L3N2Zz4=">
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --fg:#1b1d21; --muted:#6b7280; --accent:#2563eb; --on:#16a34a; --off:#9ca3af; --line:#e5e7eb; --warn:#b45309; --warnbg:#fef3c7; --err:#dc2626; --tag:#eef2ff; --tagfg:#3730a3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#111317; --card:#1b1e24; --fg:#e8eaee; --muted:#9aa1ad; --line:#2a2e36; --off:#4b5563; --warnbg:#3a2a0a; --warn:#fbbf24; --tag:#1e2240; --tagfg:#a5b4fc; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:16px; font:15px/1.4 system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  .wrap { max-width:620px; margin:0 auto; display:grid; gap:14px; }
+  .col { display:grid; gap:14px; align-content:start; }
+  @media (min-width: 900px) {
+    .wrap { max-width:1200px; grid-template-columns:1fr 1fr; align-items:start; }
+    .full { grid-column:1 / -1; }
+  }
+  button:disabled { opacity:.6; cursor:wait; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+  h1 { margin:0 0 4px; font-size:20px; }
+  h2 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  .tag { font-size:11px; text-transform:none; letter-spacing:0; padding:2px 7px; border-radius:99px; background:var(--tag); color:var(--tagfg); font-weight:500; }
+  .muted { color:var(--muted); font-size:13px; }
+  button { font:inherit; padding:7px 13px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--fg); cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button.danger { background:var(--err); color:#fff; border-color:var(--err); }
+  .devrow { display:flex; gap:8px 16px; flex-wrap:wrap; align-items:center; margin-bottom:6px; font-size:14px; }
+  .devrow label { display:inline-flex; gap:6px; align-items:center; }
+  .devrow input { width:130px; }
+  details .row { align-items:flex-start; }
+  button.toggle { width:100%; padding:16px; font-size:20px; font-weight:600; color:#fff; border:none; margin-top:10px; }
+  .toggle.on { background:var(--on); } .toggle.off { background:var(--off); }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; text-align:center; }
+  .grid3 div { padding:6px 0; } .grid3 b { display:block; font-size:19px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  input,select { font:inherit; padding:6px 8px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--fg); }
+  input[type=number] { width:84px; }
+  input.wide { flex:1; min-width:180px; }
+  label.day { display:inline-flex; gap:3px; align-items:center; font-size:13px; }
+  ul { list-style:none; padding:0; margin:10px 0 0; }
+  li { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+  li .t { flex:1; min-width:180px; } li.disabled .t { opacity:.45; text-decoration:line-through; }
+  .tabs { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { border:none; border-radius:0; padding:6px 14px; }
+  .seg button.sel { background:var(--accent); color:#fff; }
+  .nav { display:flex; align-items:center; gap:6px; font-size:14px; }
+  .nav button { padding:4px 11px; } .nav span { min-width:150px; text-align:center; }
+  .chtotal { margin-top:10px; font-size:14px; } .chtotal .muted { margin-left:10px; }
+  #chartbox { position:relative; margin-top:6px; }
+  #chart { width:100%; height:230px; display:block; touch-action:pan-y; }
+  #chart text { fill:var(--muted); font-size:11px; }
+  #chart .grid { stroke:var(--line); stroke-width:1; }
+  #chart .bar { fill:var(--accent); } #chart .bar.hl { fill:#1d4ed8; }
+  #chart .prev { fill:var(--muted); opacity:.35; }
+  label.cmp { display:inline-flex; gap:6px; align-items:center; font-size:13px; color:var(--muted); margin-top:8px; }
+  .chtotal .prev { color:var(--muted); }
+  @media (prefers-color-scheme: dark) { #chart .bar.hl { fill:#60a5fa; } }
+  #tip { position:absolute; pointer-events:none; display:none; background:var(--fg); color:var(--bg); font-size:12px; padding:5px 8px; border-radius:6px; white-space:nowrap; transform:translate(-50%,-100%); }
+  #err { color:var(--err); font-size:14px; }
+  .banner { background:var(--warnbg); color:var(--warn); border-radius:8px; padding:8px 10px; font-size:14px; margin-top:8px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td { padding:6px 0; border-top:1px solid var(--line); }
+  td:last-child { text-align:right; }
+  .set { display:grid; grid-template-columns:1fr auto; gap:10px 12px; align-items:center; }
+  .set .muted { display:block; }
+  details summary { cursor:pointer; color:var(--muted); font-size:13px; margin-top:8px; }
+  .cost { font-size:28px; font-weight:600; }
+  .head { display:flex; align-items:center; gap:10px; }
+  .ibtn { width:28px; height:28px; padding:0; border-radius:50%; font-weight:700; font-style:italic; font-family:Georgia,serif; }
+  #info { display:none; margin-top:10px; } #info.open { display:block; }
+  #info table { width:auto; } #info td { padding-right:24px; } #info td:last-child { text-align:left; }
+  #info td:first-child { color:var(--muted); } #info td:last-child { font-family:ui-monospace,monospace; font-size:13px; user-select:all; }
+  table.stats th { text-align:right; font-weight:500; color:var(--muted); font-size:12px; padding:4px 0 4px 10px; }
+  table.stats th:first-child { text-align:left; padding-left:0; }
+  table.stats td { text-align:right; padding-left:10px; } table.stats td:first-child { text-align:left; padding-left:0; }
+  tr.avg td { color:var(--muted); font-size:13px; border-top:none; padding-top:0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card full">
+    <div class="head"><h1 id="pname" style="flex:1">Smart Plug</h1>
+      <button class="ibtn" title="Device info" onclick="toggleInfo()">i</button></div>
+    <div id="info"><table id="infotab"></table></div>
+    <div class="muted" id="updated">connecting…</div>
+    <div id="err"></div>
+    <div id="faults"></div>
+    <button class="toggle off" id="toggle" onclick="toggle()">…</button>
+    <div class="muted" id="cdinfo" style="margin-top:6px"></div>
+  </div>
+
+  <div class="col">
+  <div class="card">
+    <h2>Live</h2>
+    <div class="grid3">
+      <div><b id="w">–</b><span class="muted">W</span></div>
+      <div><b id="v">–</b><span class="muted">V</span></div>
+      <div><b id="a">–</b><span class="muted">A</span></div>
+    </div>
+    <div class="row muted" style="justify-content:center">Right now this costs <b id="eurh" style="color:var(--fg)">–</b>&nbsp;per hour, <b id="eurd" style="color:var(--fg)">–</b>&nbsp;per 24 h</div>
+  </div>
+
+  <div class="card">
+    <h2>Energy &amp; cost <span class="tag">needs this program running</span></h2>
+    <div class="devrow">
+      <label>Plugged in now <input list="devlist" id="device" maxlength="40" placeholder="e.g. AC"><datalist id="devlist"></datalist>
+        <button onclick="saveDevice()">Save</button></label>
+      <label>Show <select id="devview" onchange="setView(this.value)"><option value="">All devices</option></select></label>
+    </div>
+    <div class="muted">Every reading is tagged with the device name, so you can switch the plug to something else and still see the AC on its own later.</div>
+    <details style="margin-bottom:8px">
+      <summary>Forgot to change the name? Fix a stretch</summary>
+      <div class="row">From <input type="datetime-local" id="rl_from"> to <input type="datetime-local" id="rl_to"></div>
+      <div class="row">was actually <input list="devlist" id="rl_dev" maxlength="40" placeholder="device name" style="width:130px">
+        <button onclick="relabel()">Relabel</button> <span class="muted" id="rl_res"></span></div>
+    </details>
+    <table>
+      <tr><td>Today</td><td><span id="kwh_today">–</span> kWh · <b id="eur_today">–</b></td></tr>
+      <tr><td>This month</td><td><span id="kwh_month">–</span> kWh · <b id="eur_month">–</b></td></tr>
+      <tr><td>Month projection</td><td><span id="kwh_proj">–</span> kWh · <b id="eur_proj">–</b></td></tr>
+      <tr><td>Total logged</td><td><span id="kwh_total">–</span> kWh · <b id="eur_total">–</b></td></tr>
+    </table>
+    <div class="muted" id="proj_note" style="margin-top:6px"></div>
+    <div class="muted" id="coverage"></div>
+    <h2 style="margin-top:16px">Runtime &amp; usage</h2>
+    <table class="stats">
+      <thead><tr><th></th><th>Runtime</th><th>Energy</th><th>Cost</th></tr></thead>
+      <tbody id="periods"></tbody>
+    </table>
+    <div class="muted" style="margin-top:4px">Runtime = time the plug was switched on. Averages are per day that has data.</div>
+    <h2 style="margin-top:16px">Per device <span class="tag">all time</span></h2>
+    <table class="stats">
+      <thead><tr><th>Device</th><th>Runtime</th><th>Energy</th><th>Cost</th><th>Logged</th></tr></thead>
+      <tbody id="devtab"></tbody>
+    </table>
+    <h2 style="margin-top:16px">Usage chart</h2>
+    <div class="tabs">
+      <div class="seg"><button data-r="day" class="sel">Day</button><button data-r="week">Week</button><button data-r="month">Month</button></div>
+      <div class="nav"><button onclick="chartStep(-1)" aria-label="Previous">‹</button><span id="ch_title">–</span><button onclick="chartStep(1)" id="ch_next" aria-label="Next">›</button></div>
+    </div>
+    <label class="cmp"><input type="checkbox" id="cmp" onchange="setCompare(this.checked)"> Compare with previous <span id="cmp_what">day</span></label>
+    <div class="chtotal"><b id="ch_total">–</b> kWh · <b id="ch_eur">–</b><span class="muted" id="ch_prev"></span></div>
+    <div id="chartbox"><svg id="chart"></svg><div id="tip"></div></div>
+    <div class="row">
+      Price <input type="number" step="0.0001" id="price" style="width:100px"> €/kWh
+      <button onclick="savePrice()">Save</button>
+    </div>
+    <div class="muted">Energy price only.</div>
+    <div class="row">
+      <a id="exp_all" href="/api/export/readings.csv" download><button>Export all readings (CSV)</button></a>
+      <a id="exp_dev" href="#" download style="display:none"><button>Export <span id="exp_dev_name"></span> only (CSV)</button></a>
+    </div>
+    <details>
+      <summary>Danger zone</summary>
+      <div class="row"><button class="danger" onclick="resetData()">Delete all measured data</button>
+        <span class="muted">Removes every reading and all charts. Settings, schedules and the price stay. Cannot be undone.</span></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>Alerts <span class="tag">needs this program running</span></h2>
+    <div class="muted">Shown here, and sent to Discord (webhook URL) or ntfy if a URL is set. Sent for: power above your limit, plug fault, plug unreachable, plug back online.</div>
+    <div class="row">Alert when power is above <input type="number" id="al_w" min="0"> W <span class="muted">(0 = off)</span></div>
+    <div class="row">Alert when this month's cost passes <input type="number" id="al_budget" min="0" step="1"> € <span class="muted">(0 = off, all devices)</span></div>
+    <div class="row"><label style="display:inline-flex;gap:6px;align-items:center"><input type="checkbox" id="al_report"> Send a report on the 1st of each month: last month's kWh, cost, busiest day, per device</label></div>
+    <div class="row"><input class="wide" id="al_url" placeholder="Discord webhook URL or ntfy topic URL (optional)"></div>
+    <div class="row"><button class="primary" onclick="saveAlerts()">Save</button>
+      <button onclick="testNotify(this)">Send test</button>
+      <button onclick="testReport(this)">Send report now</button> <span class="muted" id="testres"></span></div>
+    <ul id="al_list"></ul>
+  </div>
+  </div>
+
+  <div class="col">
+  <div class="card">
+    <h2>Countdown <span class="tag">stored on plug</span></h2>
+    <div class="muted">Switches the plug to the opposite state when it runs out. Works even when this program is off.</div>
+    <div class="row">
+      <input type="number" id="cdmin" value="30" min="1" max="1440"> min
+      <button class="primary" onclick="setCountdown()">Start</button>
+      <button onclick="dev('countdown', 0)">Cancel</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Auto-off after switching on <span class="tag">stored on plug</span></h2>
+    <div class="muted">"Inching": every time the plug turns on, it turns itself off again after this many seconds.</div>
+    <div class="row">
+      <label><input type="checkbox" id="inch_en"> enabled</label>
+      <input type="number" id="inch_s" min="1" max="65535" value="60"> seconds
+      <button class="primary" onclick="saveInching()">Save</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Cycle timer <span class="tag">stored on plug</span></h2>
+    <div class="muted">Within a time window, alternate between on for X minutes and off for Y minutes. Up to 10.</div>
+    <div class="row">
+      <input type="time" id="cy_start" value="08:00"> to <input type="time" id="cy_end" value="20:00">
+    </div>
+    <div class="row">
+      on <input type="number" id="cy_on" value="30" min="1" max="1439"> min,
+      off <input type="number" id="cy_off" value="30" min="1" max="1439"> min
+    </div>
+    <div class="row days" id="cy_days"></div>
+    <div class="row"><button class="primary" onclick="addCycle()">Add</button></div>
+    <ul id="cy_list"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Random timer <span class="tag">stored on plug</span></h2>
+    <div class="muted">"Away mode": switches on and off at random within the window, so the home looks occupied. Up to 16.</div>
+    <div class="row">
+      <input type="time" id="rn_start" value="18:00"> to <input type="time" id="rn_end" value="23:00">
+    </div>
+    <div class="row days" id="rn_days"></div>
+    <div class="row"><button class="primary" onclick="addRandom()">Add</button></div>
+    <ul id="rn_list"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Weekly schedule <span class="tag">needs this program running</span></h2>
+    <div class="muted">Fixed on/off times. The Tuya app keeps these in its cloud, so here this program runs them instead.</div>
+    <div class="row">
+      <input type="time" id="stime" value="07:00">
+      <select id="saction"><option value="on">turn on</option><option value="off">turn off</option></select>
+    </div>
+    <div class="row days" id="sc_days"></div>
+    <div class="row"><button class="primary" onclick="addSchedule()">Add</button></div>
+    <ul id="slist"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Plug settings <span class="tag">stored on plug</span></h2>
+    <div class="set">
+      <div>Relay status<span class="muted">What the plug does when power comes back after a power cut</span></div>
+      <select id="power_on" onchange="dev('power_on', this.value)">
+        <option value="off">Off</option><option value="on">On</option><option value="memory">Last state</option>
+      </select>
+      <div>Light mode<span class="muted">"Switch location" lights the LED while the plug is off, so you can find it at night</span></div>
+      <select id="led" onchange="dev('led', this.value)">
+        <option value="relay">Indicate switch on/off</option><option value="pos">Indicate switch location</option><option value="none">Off</option><option value="on">On</option>
+      </select>
+      <div>Child lock<span class="muted">Disables the button on the plug</span></div>
+      <input type="checkbox" id="child_lock" onchange="dev('child_lock', this.checked)">
+      <div>Overcharge protection<span class="muted">Turns the plug off when power stays below 3 W for 40 min, e.g. when a phone or e-bike has finished charging. Keep it off for the AC: its standby draw is below 3 W.</span></div>
+      <input type="checkbox" id="overcurrent" onchange="dev('overcurrent', this.checked)">
+    </div>
+  </div>
+  </div>
+
+</div>
+
+<script>
+const DAYS = ["mon","tue","wed","thu","fri","sat","sun"];
+for (const id of ["cy_days","rn_days","sc_days"])
+  document.getElementById(id).innerHTML = DAYS.map(d =>
+    `<label class="day"><input type="checkbox" value="${d}" checked>${d}</label>`).join("");
+const pickDays = id => [...document.querySelectorAll(`#${id} input:checked`)].map(i => i.value);
+const dayText = days => days.length === 7 ? "every day" : DAYS.filter(d => days.includes(d)).join(" ");
+const $ = id => document.getElementById(id);
+
+let S = null, editing = false;
+document.addEventListener("focusin", e => { if (e.target.matches("input")) editing = true; });
+document.addEventListener("focusout", () => editing = false);
+
+async function post(url, body) {
+  const r = await fetch(url, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  if (!r.ok) alert("Failed: " + (await r.text()).slice(0, 200));
+  refresh(true);
+}
+const dev = (setting, value) => post("/api/device", {setting, value});
+async function toggle() {
+  const b = $("toggle"), want = !(S && S.on);
+  b.disabled = true;
+  b.textContent = want ? "turning on…" : "turning off…";
+  try { await post("/api/switch", {on: want}); } finally { b.disabled = false; }
+}
+function setCountdown() { dev("countdown", Math.round(+$("cdmin").value * 60)); }
+function saveInching() { dev("inching", {enabled: $("inch_en").checked, seconds: +$("inch_s").value}); }
+
+function addCycle() {
+  const days = pickDays("cy_days"); if (!days.length) return alert("Pick at least one day");
+  const list = [...S.cycle, {enabled:true, days, start:$("cy_start").value, end:$("cy_end").value, on_min:+$("cy_on").value, off_min:+$("cy_off").value}];
+  if (list.length > 10) return alert("The plug stores at most 10 cycle timers");
+  dev("cycle", list);
+}
+function addRandom() {
+  const days = pickDays("rn_days"); if (!days.length) return alert("Pick at least one day");
+  const list = [...S.random, {enabled:true, days, start:$("rn_start").value, end:$("rn_end").value}];
+  if (list.length > 16) return alert("The plug stores at most 16 random timers");
+  dev("random", list);
+}
+function listEdit(kind, i, op) {
+  const list = S[kind].map(x => ({...x}));
+  if (op === "del") list.splice(i, 1); else list[i].enabled = !list[i].enabled;
+  dev(kind, list);
+}
+function addSchedule() {
+  const days = pickDays("sc_days"); if (!days.length) return alert("Pick at least one day");
+  post("/api/schedules", {time:$("stime").value, action:$("saction").value, days});
+}
+function savePrice() { post("/api/settings", {price_per_kwh: +$("price").value}); }
+async function toggleInfo() {
+  const el = $("info"); el.classList.toggle("open");
+  if (!el.classList.contains("open")) return;
+  const i = await (await fetch("/api/info")).json();
+  const rows = [["Name", i.name], ["Product", i.product], ["Model", i.model], ["Virtual ID", i.device_id],
+                ["MAC", i.mac], ["IP", i.ip], ["Protocol", i.protocol], ["Reading every", i.poll_seconds + " s"]];
+  $("infotab").innerHTML = rows.filter(r => r[1] != null).map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("");
+}
+async function testNotify(b) {
+  b.disabled = true; $("testres").textContent = "sending…";
+  await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({notify_url: $("al_url").value})});
+  const r = await (await fetch("/api/test-notify", {method:"POST"})).json();
+  $("testres").textContent = r.ok ? "sent ✓" : "failed: " + r.error; b.disabled = false;
+}
+const hm = s => { const m = Math.round(s/60); return `${Math.floor(m/60)} h ${String(m%60).padStart(2,"0")} min`; };
+function saveAlerts() { post("/api/settings", {power_above_w: +$("al_w").value, notify_url: $("al_url").value,
+                                               budget_eur: +$("al_budget").value, monthly_report: $("al_report").checked}); }
+async function testReport(b) {
+  b.disabled = true; $("testres").textContent = "sending…";
+  await fetch("/api/settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({notify_url: $("al_url").value})});
+  const r = await (await fetch("/api/test-report", {method:"POST"})).json();
+  $("testres").textContent = r.ok ? "report sent ✓" : "failed: " + r.error; b.disabled = false;
+}
+async function relabel() {
+  const from = $("rl_from").value, to = $("rl_to").value, device = $("rl_dev").value.trim();
+  if (!from || !to || !device) { alert("Fill in from, to and the device name."); return; }
+  if (!confirm(`Label everything from ${from.replace("T"," ")} to ${to.replace("T"," ")} as "${device}"?`)) return;
+  const r = await (await fetch("/api/relabel", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({from, to, device})})).json();
+  $("rl_res").textContent = r.ok ? `${r.changed} readings relabeled.` : "Failed: " + r.error;
+  refresh(true); loadChart();
+}
+
+const fmt = (x, d=1) => x == null ? "–" : (+x).toFixed(d);
+const eur = x => x == null ? "–" : (+x).toLocaleString("de-DE", {style:"currency", currency:"EUR"});
+const dur = s => s >= 3600 ? `${Math.floor(s/3600)} h ${Math.round(s%3600/60)} min` : s >= 60 ? `${Math.floor(s/60)} min ${s%60} s` : `${s} s`;
+
+// ---- Usage chart: Day (x = hours), Week (x = Mon–Sun), Month (x = 1..31); y = kWh ----
+const today = () => new Date().toLocaleDateString("sv-SE");
+let CH = {range: "day", date: today(), data: null, price: 0.3205};
+let CMP = false; try { CMP = localStorage.getItem("plug_cmp") === "1"; } catch {}
+$("cmp").checked = CMP;
+function setCompare(v) { CMP = v; try { localStorage.setItem("plug_cmp", v ? "1" : "0"); } catch {} drawChart(); }
+document.querySelectorAll(".seg button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".seg button").forEach(x => x.classList.toggle("sel", x === b));
+  CH.range = b.dataset.r; CH.date = today(); $("cmp_what").textContent = CH.range; loadChart();
+});
+function chartStep(dir) {
+  const d = new Date(CH.date + "T12:00:00");
+  if (CH.range === "day") d.setDate(d.getDate() + dir);
+  else if (CH.range === "week") d.setDate(d.getDate() + 7*dir);
+  else { d.setDate(1); d.setMonth(d.getMonth() + dir); }
+  const s = d.toLocaleDateString("sv-SE");
+  if (s > today()) return;
+  CH.date = s; loadChart();
+}
+async function loadChart() {
+  try { CH.data = await (await fetch(`/api/chart?range=${CH.range}&date=${CH.date}&device=${encodeURIComponent(VIEW)}`)).json(); } catch { return; }
+  drawChart();
+}
+
+// ---- Device label: which appliance is plugged in, and which one the numbers show ----
+let VIEW = ""; try { VIEW = localStorage.getItem("plug_view") || ""; } catch {}
+function setView(v) { VIEW = v; try { localStorage.setItem("plug_view", v); } catch {} refresh(true); loadChart(); }
+async function saveDevice() {
+  const name = $("device").value.trim();
+  if (!name) { alert("Enter a name, e.g. AC"); return; }
+  await post("/api/settings", {device: name});
+}
+function renderDevices(e) {
+  const names = e.devices.map(d => d.device);
+  if (!names.includes(e.current_device)) names.unshift(e.current_device);
+  $("devlist").innerHTML = names.map(n => `<option value="${n}">`).join("");
+  const sel = $("devview");
+  if (sel.options.length !== names.length + 1 || names.some((n, i) => sel.options[i+1].value !== n)) {
+    sel.innerHTML = `<option value="">All devices</option>` + names.map(n => `<option value="${n}">${n}</option>`).join("");
+  }
+  if (!names.includes(VIEW)) VIEW = "";
+  sel.value = VIEW;
+  if (!editing) $("device").value = e.current_device;
+  $("devtab").innerHTML = e.devices.map(d => `<tr><td>${d.device}${d.device === e.current_device ? ' <span class="tag">now</span>' : ""}</td><td>${hm(d.runtime_s)}</td><td>${d.kwh.toFixed(2)} kWh</td><td>${eur(d.eur)}</td><td class="muted">${d.first === d.last ? d.first : d.first + " – " + d.last}</td></tr>`).join("")
+    || `<tr><td colspan="5" class="muted">Nothing logged yet.</td></tr>`;
+  $("exp_dev").style.display = VIEW ? "" : "none";
+  if (VIEW) { $("exp_dev").href = "/api/export/readings.csv?device=" + encodeURIComponent(VIEW); $("exp_dev_name").textContent = VIEW; }
+}
+async function resetData() {
+  if (!confirm("Delete ALL measured data? Every reading, every chart, every total. This cannot be undone.")) return;
+  if (prompt('Type RESET to confirm') !== "RESET") return;
+  const r = await (await fetch("/api/reset", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({confirm:"RESET"})})).json();
+  alert(r.ok ? `Deleted ${r.deleted} readings.` : "Failed: " + r.error);
+  refresh(true); loadChart();
+}
+function niceStep(max, n) {
+  const raw = max / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+}
+const kwhTxt = (x, step) => x.toFixed(Math.max(0, Math.min(4, -Math.floor(Math.log10(step || 1)) + (step < 1 ? 1 : 0))));
+function xLabel(i, W) {
+  const L = CH.data.labels[i];
+  if (CH.range === "day") return (i % (W < 500 ? 6 : 3) === 0) ? String(L).padStart(2, "0") + ":00" : "";
+  if (CH.range === "week") return W < 420 ? L.slice(0, 2) : L;
+  const every = W < 420 ? 7 : 5;
+  return (i === 0 || (i + 1) % every === 0) ? String(L) : "";
+}
+function tipText(i) {
+  const D = CH.data, L = D.labels[i], v = D.kwh[i];
+  const when = CH.range === "day" ? `${String(L).padStart(2,"0")}:00–${String(L+1).padStart(2,"0")}:00`
+             : CH.range === "week" ? L : `${L}. ${D.title}`;
+  const pv = CMP && D.prev && D.prev.kwh[i] != null ? D.prev.kwh[i] : null;
+  return `${when} · ${v < 0.1 ? (v*1000).toFixed(1) + " Wh" : v.toFixed(3) + " kWh"} · ${eur(v * CH.price)}`
+       + (pv == null ? "" : ` (before: ${pv < 0.1 ? (pv*1000).toFixed(1) + " Wh" : pv.toFixed(3) + " kWh"})`);
+}
+function drawChart() {
+  const D = CH.data, svg = $("chart"); if (!D || !D.kwh) return;
+  $("ch_title").textContent = D.title;
+  $("ch_total").textContent = D.total_kwh.toFixed(3); $("ch_eur").textContent = eur(D.total_eur);
+  $("ch_next").disabled = D.date >= today() || (CH.range !== "day" && (() => { const d = new Date(D.date+"T12:00:00");
+    if (CH.range === "week") d.setDate(d.getDate() - (d.getDay()+6)%7 + 7); else { d.setDate(1); d.setMonth(d.getMonth()+1); }
+    return d.toLocaleDateString("sv-SE") > today(); })());
+  const PV = CMP && D.prev ? D.prev.kwh : null;
+  $("ch_prev").textContent = PV ? ` · before (${D.prev.title}): ${D.prev.total_kwh.toFixed(3)} kWh · ${eur(D.prev.total_eur)}` : "";
+  $("ch_prev").className = "prev";
+  const W = svg.clientWidth || 560, H = 230, L = 46, R = 6, T = 22, B = 24;
+  const n = D.kwh.length, max = Math.max(...D.kwh, ...(PV || []), 0);
+  const step = max > 0 ? niceStep(max, 4) : 0.25, top = max > 0 ? Math.ceil(max / step) * step : 1;
+  const y = v => T + (H - T - B) * (1 - v / top), bw = (W - L - R) / n, gap = Math.min(4, bw * .25);
+  let s = `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(0)}" y2="${y(0)}"/>`;
+  for (let v = step; v <= top + 1e-9; v += step)
+    s += `<line class="grid" x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke-dasharray="2 3"/>`;
+  for (let v = 0; v <= top + 1e-9; v += step)
+    s += `<text x="${L-6}" y="${y(v)+4}" text-anchor="end">${kwhTxt(v, step)}</text>`;
+  s += `<text x="${L-6}" y="10" text-anchor="end" style="font-size:10px">kWh</text>`;
+  for (let i = 0; i < n; i++) {
+    const x = L + i*bw, v = D.kwh[i], h = y(0) - y(v), lab = xLabel(i, W);
+    if (PV && PV[i] > 0) {   // previous period: a wider grey bar behind the blue one
+      const ph = y(0) - y(PV[i]);
+      s += `<rect class="prev" x="${x + gap/4}" y="${y(PV[i])}" width="${bw - gap/2}" height="${ph}" rx="3"/>`;
+    }
+    if (h > 0.5) {
+      const r = Math.min(4, (bw - gap) / 2, h);  // rounded top, flat on the baseline
+      const x0 = x + gap/2, x1 = x + bw - gap/2, y0 = y(v), yb = y(0);
+      s += `<path class="bar" data-i="${i}" d="M${x0},${yb}V${y0+r}Q${x0},${y0} ${x0+r},${y0}H${x1-r}Q${x1},${y0} ${x1},${y0+r}V${yb}Z"/>`;
+    }
+    if (lab) s += `<text x="${x + bw/2}" y="${H-6}" text-anchor="middle">${lab}</text>`;
+    s += `<rect data-i="${i}" x="${x}" y="${T}" width="${bw}" height="${H-T-B}" fill="transparent"/>`;
+  }
+  if (max === 0) s += `<text x="${(L+W)/2}" y="${H/2}" text-anchor="middle">No data logged for this period</text>`;
+  if (PV) s += `<rect x="${W-R-96}" y="${T-14}" width="10" height="10" rx="2" class="prev"/><text x="${W-R-82}" y="${T-5}">before</text>`
+             + `<rect x="${W-R-40}" y="${T-14}" width="10" height="10" rx="2" class="bar"/><text x="${W-R-26}" y="${T-5}">now</text>`;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.innerHTML = s; $("tip").style.display = "none";
+}
+function chartHover(ev) {
+  const t = ev.target.closest("[data-i]"), tip = $("tip");
+  document.querySelectorAll("#chart .bar.hl").forEach(b => b.classList.remove("hl"));
+  if (!t || !CH.data) { tip.style.display = "none"; return; }
+  const i = +t.dataset.i, bar = document.querySelector(`#chart .bar[data-i="${i}"]`);
+  if (bar) bar.classList.add("hl");
+  const box = $("chartbox").getBoundingClientRect(), r = (bar || t).getBoundingClientRect();
+  tip.textContent = tipText(i); tip.style.display = "block";
+  tip.style.left = Math.min(Math.max(r.left + r.width/2 - box.left, 90), box.width - 90) + "px";
+  tip.style.top = (bar ? r.top - box.top - 6 : box.height / 2) + "px";
+}
+$("chart").addEventListener("mousemove", chartHover);
+$("chart").addEventListener("click", chartHover);
+$("chart").addEventListener("mouseleave", () => { $("tip").style.display = "none"; document.querySelectorAll("#chart .bar.hl").forEach(b => b.classList.remove("hl")); });
+let rsz; window.addEventListener("resize", () => { clearTimeout(rsz); rsz = setTimeout(drawChart, 150); });
+let chartTick = 0;
+function charts(e) {
+  CH.price = e.price_per_kwh;
+  if (chartTick++ % 10 === 0) loadChart();   // every ~30 s; tab and arrow clicks load at once
+}
+
+function renderList(el, items, kind, text) {
+  el.innerHTML = items.map((x, i) =>
+    `<li class="${x.enabled ? "" : "disabled"}"><span class="t">${text(x)}</span>
+     <button onclick="${kind === "schedules" ? `post('/api/schedules',{toggle:${i}})` : `listEdit('${kind}',${i},'toggle')`}">${x.enabled ? "Pause" : "Resume"}</button>
+     <button onclick="${kind === "schedules" ? `post('/api/schedules',{delete:${i}})` : `listEdit('${kind}',${i},'del')`}">Delete</button></li>`
+  ).join("") || `<li class="muted">None.</li>`;
+}
+
+async function refresh(force) {
+  if (editing && !force) return;
+  let d; try { d = await (await fetch("/api/status?device=" + encodeURIComponent(VIEW))).json(); } catch { $("err").textContent = "Program not reachable"; return; }
+  S = d.status;
+  $("err").textContent = d.error ? "Plug not reachable: " + d.error : "";
+  $("updated").textContent = d.updated ? "updated " + new Date(d.updated*1000).toLocaleTimeString() : "no data yet";
+  if (S) {
+    const b = $("toggle");
+    b.textContent = S.on ? "ON · tap to turn off" : "OFF · tap to turn on";
+    b.className = "toggle " + (S.on ? "on" : "off");
+    $("w").textContent = fmt(S.power_w); $("v").textContent = fmt(S.voltage_v); $("a").textContent = fmt(S.current_a, 2);
+    $("cdinfo").textContent = S.countdown_s ? `Countdown: turns ${S.on ? "off" : "on"} in ${dur(S.countdown_s)}` : "";
+    $("faults").innerHTML = S.faults.length ? `<div class="banner">Plug fault: ${S.faults.join(", ")}</div>` : "";
+    if (!editing) {
+      $("inch_en").checked = S.inching.enabled; $("inch_s").value = S.inching.seconds;
+      $("power_on").value = S.power_on; $("led").value = S.led;
+      $("child_lock").checked = !!S.child_lock; $("overcurrent").checked = !!S.overcurrent;
+    }
+    renderList($("cy_list"), S.cycle, "cycle", x => `<b>${x.start}–${x.end}</b> on ${x.on_min} min / off ${x.off_min} min <span class="muted">(${dayText(x.days)})</span>`);
+    renderList($("rn_list"), S.random, "random", x => `<b>${x.start}–${x.end}</b> random <span class="muted">(${dayText(x.days)})</span>`);
+  }
+  const e = d.energy;
+  renderDevices(e);
+  $("eurh").textContent = eur(e.now_eur_per_hour); $("eurd").textContent = eur(e.now_eur_per_day);
+  $("kwh_today").textContent = fmt(e.today_kwh, 3); $("eur_today").textContent = eur(e.today_eur);
+  const k = x => fmt(x, x != null && x < 10 ? 3 : 2);
+  $("kwh_month").textContent = k(e.month_kwh); $("eur_month").textContent = eur(e.month_eur);
+  $("kwh_proj").textContent = fmt(e.projected_month_kwh, 1); $("eur_proj").textContent = eur(e.projected_month_eur);
+  $("kwh_total").textContent = k(e.total_kwh); $("eur_total").textContent = eur(e.total_eur);
+  const mh = e.measured_month_h, trust = mh < 24 ? "rough guess, needs at least a day" : mh < 7*24 ? "getting better, best after a week" : "reliable if your use stays similar";
+  $("proj_note").textContent = e.projected_month_kwh == null ? "Projection appears after 1 h of measuring."
+    : `Projection based on ${mh < 48 ? mh + " h" : (mh/24).toFixed(1) + " days"} measured this month (${trust}).`;
+  $("coverage").textContent = `Logged ${e.coverage_today_pct}% of today. Time when this program was off is missing.`;
+  const P = e.periods, row = (label, r, avg) => `<tr class="${avg ? "avg" : ""}"><td>${label}</td><td>${hm(avg ? r.avg_runtime_s : r.runtime_s)}</td><td>${(avg ? r.avg_kwh : r.kwh).toFixed(2)} kWh</td><td>${eur(avg ? r.avg_eur : r.eur)}</td></tr>`;
+  $("periods").innerHTML = row("Today", P.today) + row("Last 7 days", P.d7) + row("  ⌀ per day", P.d7, true)
+                         + row("Last 30 days", P.d30) + row("  ⌀ per day", P.d30, true);
+  if (!editing) {
+    $("price").value = e.price_per_kwh;
+    $("al_w").value = d.alerts_cfg.power_above_w || 0; $("al_url").value = d.alerts_cfg.notify_url || "";
+    $("al_budget").value = d.alerts_cfg.budget_eur || 0; $("al_report").checked = !!d.alerts_cfg.monthly_report;
+  }
+  charts(e);
+  renderList($("slist"), d.schedules, "schedules", s => `<b>${s.time}</b> turn ${s.action} <span class="muted">(${dayText(s.days)})</span>`);
+  $("al_list").innerHTML = d.alerts.map(a => `<li><span class="t">${a.msg}</span><span class="muted">${new Date(a.ts*1000).toLocaleString()}</span></li>`).join("") || `<li class="muted">No alerts.</li>`;
+}
+refresh(true); setInterval(refresh, 3000);
+</script>
+</body>
+</html>

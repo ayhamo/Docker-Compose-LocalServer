@@ -1,5 +1,15 @@
 services:
   lastglance:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+      - CHOWN
     image: ghcr.io/krelltunez/lastglance:latest
     container_name: lastglance
     restart: unless-stopped

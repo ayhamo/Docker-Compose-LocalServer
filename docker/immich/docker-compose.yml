@@ -63,6 +63,15 @@ services:
       disable: false
 
   redis:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
     container_name: immich_redis
     image: docker.io/valkey/valkey:9@sha256:418652cfb58ef879d4978c33553735d7147016032d5aefaa14c828e611eb9dfd
     healthcheck:

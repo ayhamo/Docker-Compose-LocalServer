@@ -1,5 +1,10 @@
 services:
   bentopdf:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     image: ghcr.io/alam00000/bentopdf:latest
     container_name: bentopdf
     restart: unless-stopped

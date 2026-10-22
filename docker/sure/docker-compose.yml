@@ -52,6 +52,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./app-storage:/rails/storage
+      - ./overrides/zz_yahoo_user_agents.rb:/rails/config/initializers/zz_yahoo_user_agents.rb:ro
     # Ports commented out for Nginx Proxy Manager routing
     # ports:
     #   - ${PORT:-3000}:3000
@@ -81,6 +82,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./app-storage:/rails/storage
+      - ./overrides/zz_yahoo_user_agents.rb:/rails/config/initializers/zz_yahoo_user_agents.rb:ro
     environment:
       <<: *rails_env
     depends_on:
@@ -117,6 +119,17 @@ services:
       - sure_net
 
   redis:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - SETPCAP
+      - CHOWN
+      - DAC_OVERRIDE
     image: redis:latest
     container_name: sure-redis
     restart: unless-stopped

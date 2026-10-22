@@ -10,8 +10,11 @@ services:
       - ND_LOGLEVEL=info
       - ND_PLUGINS_ENABLED=true
       - ND_PLUGINS_AUTORELOAD=true
+      - ND_LYRICSPRIORITY=.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded,nd-lyrics,navidrome-musixmatch-plugin,navidrome-shazam-plugin,navidrome-lyricstranslate-plugin
       - ND_AGENTS=audiomuseai,apple-music,lastfm,deezer
       - "ND_PID_ALBUM=folder"
+      - ND_LASTFM_APIKEY=${LASTFM_APIKEY}
+      - ND_LASTFM_SECRET=${LASTFM_SECRET}
     volumes:
       - ./navidrome-data:/data
       - /mnt/hdd/music:/music
@@ -103,6 +106,26 @@ services:
       retries: 3
     networks:
       - default
+
+  # Radio relay: re-streams HLS-only stations (Kuwait) as MP3 for Navidrome radios.
+  # Stations are listed in radio-relay/relay.py. ~12 MB idle, ~5% CPU + 45 MB per listener.
+  radio-relay:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    build: ./radio-relay
+    image: radio-relay:local
+    container_name: radio-relay
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+    networks:
+      - proxy-net
 
 networks:
   proxy-net:

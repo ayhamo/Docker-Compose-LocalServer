@@ -1,5 +1,10 @@
 services:
   dynacat:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     container_name: dynacat
     image: panonim/dynacat
     restart: unless-stopped

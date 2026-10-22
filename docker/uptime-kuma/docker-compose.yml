@@ -7,7 +7,7 @@ services:
     #   - 3001:3001
     volumes:
       - ./data:/app/data
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Allows Uptime Kuma to monitor Docker container status directly
+      # removed: Docker socket (no Docker monitors use it; it gave Kuma full Docker control)
     healthcheck:
       test: ["CMD-SHELL", "node extra/healthcheck.js || exit 1"]
       interval: 600s

@@ -1,6 +1,8 @@
 import logging
+import re
 import time
 from collections import defaultdict
+from types import SimpleNamespace
 
 import requests
 from django.apps import apps
@@ -9,14 +11,174 @@ from simple_history.utils import bulk_update_with_history
 
 import app
 from app import cache_utils
-from app.models import MediaTypes, Sources, Status
+from app.models import Item, Manga, MediaTypes, Sources, Status
+from app.providers import mangabaka, services
+from app.services import item_merge
+from app.services.watch_state import PROJECTED_MEDIA_TYPES
+from app.tasks_backfill_state import reset_backfill_state_for_identity_change
 from integrations import import_progress
 from integrations.imports import helpers, remote_removals
 from integrations.imports.helpers import MediaImportError
 
 logger = logging.getLogger(__name__)
 
+
+def publish_in_place_update(user, model, objs, write):
+    """Run ``write`` for rows updated in place and report them like new rows.
+
+    bulk_update sends no save signal. This importer is day scoped
+    (DAY_SCOPED_IMPORTERS), so History and Statistics refresh only the days it
+    reports, and the watched-state projection only sees rows it is told about.
+    The days a row sat on before the update are reported too, since a changed
+    date moves the row off them.
+    """
+    columns = {field.name for field in model._meta.concrete_fields}
+    date_fields = [name for name in ("start_date", "end_date") if name in columns]
+    previous = []
+    if date_fields:
+        previous = [
+            SimpleNamespace(**values)
+            for values in model.objects.filter(
+                pk__in=[obj.pk for obj in objs],
+            ).values(*date_fields)
+        ]
+    helpers.retry_on_lock(write)
+    helpers.note_bulk_rows([*objs, *previous])
+    if model._meta.model_name in PROJECTED_MEDIA_TYPES:
+        helpers.project_imported_watch_state(user, {obj.item_id for obj in objs})
+
+
 SOURCE_LABEL = "MangaUpdates"
+
+# MangaUpdates is the list; MangaBaka is the metadata. Every manga is stored
+# under its MangaBaka series, and the MangaUpdates id rides along in
+# provider_external_ids so the next run can find the row again.
+MU_ID_KEY = "mangaupdates_id"
+MANGABAKA_LOOKUP_URL = f"{mangabaka.base_url}/source/manga-updates/{{}}"
+BASE36_DIGITS = "0123456789abcdefghijklmnopqrstuvwxyz"
+NAMED_IN_MESSAGE = 5
+
+
+def mu_short_id(mu_id):
+    """Return MangaUpdates' 7-character short id ("0aoflwe") for a numeric id."""
+    number = int(mu_id)
+    text = ""
+    while number:
+        number, remainder = divmod(number, 36)
+        text = BASE36_DIGITS[remainder] + text
+    return text.zfill(7)
+
+
+def mangabaka_lookup(mu_id):
+    """Return the active MangaBaka series that record this MangaUpdates id."""
+    try:
+        response = services.api_request(
+            Sources.MANGABAKA.value,
+            "GET",
+            MANGABAKA_LOOKUP_URL.format(mu_short_id(mu_id)),
+            headers=mangabaka.HEADERS,
+        )
+    except requests.exceptions.HTTPError as error:
+        if (
+            error.response is not None
+            and error.response.status_code == requests.codes.not_found
+        ):
+            return []
+        raise
+    series = (response.get("data") or {}).get("series") or []
+    return [row for row in series if row.get("state") == "active"]
+
+
+def _normalized(title):
+    return re.sub(r"[\W_]+", "", (title or "").casefold())
+
+
+def _mangabaka_titles(series):
+    """Every title MangaBaka knows a series by."""
+    titles = [series.get(key) for key in ("title", "romanized_title", "native_title")]
+    for group in (series.get("secondary_titles") or {}).values():
+        titles.extend(row.get("title") for row in group or [] if isinstance(row, dict))
+    titles.extend(
+        row.get("title") for row in series.get("titles") or [] if isinstance(row, dict)
+    )
+    return {_normalized(title) for title in titles if title}
+
+
+def match_mangabaka(mu_id, mu_title):
+    """Return ``(series, None)`` for a safe MangaBaka match, else ``(None, reason)``.
+
+    Safe means exactly one active series records this MangaUpdates id and the
+    MangaUpdates title is one of its titles. Anything else stays on
+    MangaUpdates so a wrong series is never attached.
+    """
+    matches = mangabaka_lookup(mu_id)
+    if not matches:
+        return None, "not on MangaBaka"
+    if len(matches) > 1:
+        return None, "several MangaBaka series"
+    series = matches[0]
+    if _normalized(mu_title) not in _mangabaka_titles(series):
+        return None, f"title differs on MangaBaka ({series.get('title')!r})"
+    return series, None
+
+
+def mangabaka_item_fields(series):
+    """Return the Item columns MangaBaka's lookup response can fill."""
+    title = series.get("title") or ""
+    return {
+        **Item.title_fields_from_metadata(
+            {
+                "title": title,
+                "localized_title": title,
+                "original_title": series.get("romanized_title"),
+            },
+        ),
+        "image": mangabaka.get_image_url(series),
+        "synopsis": series.get("description") or "",
+        "source_url": series.get("canonical_url") or "",
+        "genres": mangabaka.get_genres(series),
+    }
+
+
+def rekey_to_mangabaka(item, series, mu_id):
+    """Move a MangaUpdates Item onto its MangaBaka series in place.
+
+    Same approach as Floppy's TMDB -> TVDB migration: the Item keeps its
+    primary key, so the Manga row, history, Date Added and lists stay put.
+    Returns False, untouched, when the MangaBaka series is already tracked.
+    """
+    mb_id = str(series["id"])
+    existing = Item.objects.filter(
+        source=Sources.MANGABAKA.value,
+        media_id=mb_id,
+        media_type=MediaTypes.MANGA.value,
+        library_media_type=item.library_media_type,
+    ).first()
+    if existing is not None:
+        if Manga.objects.filter(item=existing).exists():
+            return False
+        # An untracked MangaBaka Item only blocks the unique constraint.
+        item_merge.merge_item(loser=existing, keeper=item)
+
+    item.source = Sources.MANGABAKA.value
+    item.media_id = mb_id
+    item.provider_external_ids = {
+        **(item.provider_external_ids or {}),
+        MU_ID_KEY: str(mu_id),
+    }
+    for field, value in mangabaka_item_fields(series).items():
+        setattr(item, field, value)
+    item.save()
+    reset_backfill_state_for_identity_change([item])
+    return True
+
+
+def _list_titles(titles):
+    """Return ``A, B, C and N more`` for a warning line."""
+    shown = ", ".join(titles[:NAMED_IN_MESSAGE])
+    rest = len(titles) - NAMED_IN_MESSAGE
+    return f"{shown} and {rest} more" if rest > 0 else shown
+
 
 # ==============================================================================
 # MangaUpdates Configuration
@@ -91,6 +253,25 @@ class MangaUpdatesImporter:
 
         # Every "manga|mangaupdates|id" the remote listed this run.
         self.seen_remote = set()
+
+        # MangaUpdates id -> the user's Manga row, whichever source it is
+        # stored under now.
+        manga = MediaTypes.MANGA.value
+        self.existing_by_mu = dict(
+            self.existing_media[manga][Sources.MANGAUPDATES.value]
+        )
+        mangabaka_rows = self.existing_media[manga][Sources.MANGABAKA.value]
+        for mb_id, external_ids in Manga.objects.filter(
+            user=user,
+            item__source=Sources.MANGABAKA.value,
+        ).values_list("item__media_id", "item__provider_external_ids"):
+            mu_id = (external_ids or {}).get(MU_ID_KEY)
+            if mu_id and mb_id in mangabaka_rows:
+                self.existing_by_mu[str(mu_id)] = mangabaka_rows[mb_id]
+
+        # Titles kept on MangaUpdates metadata because no safe MangaBaka match.
+        self.stayed_on_mu = []
+        self.converted_count = 0
 
     def _login(self):
         """Authenticate with MangaUpdates API to acquire a session token."""
@@ -236,13 +417,20 @@ class MangaUpdatesImporter:
         helpers.cleanup_existing_media(self.to_delete, self.user)
         helpers.bulk_create_media(self.bulk_media, self.user)
         self._apply_bulk_updates()
+        self._convert_leftovers()
 
         created_total = sum(len(media_list) for media_list in self.bulk_media.values())
         updated_total = sum(len(media_list) for media_list in self.bulk_update.values())
 
-        if created_total > 0 or updated_total > 0:
+        if created_total > 0 or updated_total > 0 or self.converted_count > 0:
             cache_utils.clear_media_list_cache_for_user(self.user.id)
             cache_utils.clear_home_row_cache_for_user(self.user.id)
+
+        if self.stayed_on_mu:
+            self.warnings.append(
+                f"{len(self.stayed_on_mu)} manga kept MangaUpdates metadata "
+                f"(no safe MangaBaka match): {_list_titles(self.stayed_on_mu)}.",
+            )
 
         self._report_removals(total_items)
 
@@ -291,7 +479,7 @@ class MangaUpdatesImporter:
                     default_change_reason="MangaUpdates import",
                 )
 
-            helpers.retry_on_lock(do_update)
+            publish_in_place_update(self.user, model, objs, do_update)
             logger.info(
                 "Smart-diff updated %d %s row(s) in-place for user %s",
                 len(objs),
@@ -299,13 +487,80 @@ class MangaUpdatesImporter:
                 self.user.username,
             )
 
+    def _safe_match(self, mu_id, title):
+        """Return a safe MangaBaka series or None; MangaBaka being down is not fatal."""
+        try:
+            series, reason = match_mangabaka(mu_id, title)
+        except Exception:
+            logger.exception("MangaBaka lookup failed for MangaUpdates %s", mu_id)
+            return None
+        if series is None:
+            logger.info("%s stays on MangaUpdates: %s", title, reason)
+        return series
+
+    def _mangabaka_item(self, mu_id, title):
+        """Return the MangaBaka Item for a new MangaUpdates entry, or None."""
+        series = self._safe_match(mu_id, title)
+        if series is None:
+            return None
+        mb_id = str(series["id"])
+        manga = MediaTypes.MANGA.value
+        if mb_id in self.existing_media[manga][Sources.MANGABAKA.value]:
+            # Already tracked under another MangaUpdates entry.
+            logger.info("%s: MangaBaka %s is already tracked", title, mb_id)
+            return None
+        item, created = Item.objects.get_or_create(
+            source=Sources.MANGABAKA.value,
+            media_id=mb_id,
+            media_type=manga,
+            defaults={
+                **mangabaka_item_fields(series),
+                "provider_external_ids": {MU_ID_KEY: str(mu_id)},
+            },
+        )
+        if not created and (item.provider_external_ids or {}).get(MU_ID_KEY) != str(
+            mu_id
+        ):
+            item.provider_external_ids = {
+                **(item.provider_external_ids or {}),
+                MU_ID_KEY: str(mu_id),
+            }
+            item.save(update_fields=["provider_external_ids"])
+        return item
+
+    def _convert_leftovers(self):
+        """Move rows still on MangaUpdates to MangaBaka once a safe match exists."""
+        manga = MediaTypes.MANGA.value
+        source = Sources.MANGAUPDATES.value
+        for mu_id, row in self.existing_media[manga][source].items():
+            if f"{manga}|{source}|{mu_id}" not in self.seen_remote:
+                continue
+            item = Item.objects.get(pk=row.item_id)
+            title = item.title
+            series = self._safe_match(mu_id, title)
+            try:
+                if series is not None and rekey_to_mangabaka(item, series, mu_id):
+                    self.converted_count += 1
+                    continue
+            except Exception:
+                logger.exception("Could not move %s to MangaBaka", title)
+            self.stayed_on_mu.append(title)
+        if self.converted_count:
+            logger.info(
+                "Moved %d manga to MangaBaka for user %s",
+                self.converted_count,
+                self.user.username,
+            )
+
     def _report_removals(self, total_items):
         """Hand rows MangaUpdates no longer lists to the removal tracker."""
         media_type = MediaTypes.MANGA.value
         source = Sources.MANGAUPDATES.value
+        # Keyed by MangaUpdates id whatever the row is stored under, so the
+        # tracker's state carries over from before the MangaBaka move.
         candidates = {
-            f"{media_type}|{source}|{media_id}": media
-            for media_id, media in self.existing_media[media_type][source].items()
+            f"{media_type}|{source}|{mu_id}": media
+            for mu_id, media in self.existing_by_mu.items()
         }
         try:
             warning = remote_removals.sync(
@@ -350,7 +605,7 @@ class MangaUpdatesImporter:
         # SMART DIFF CHECK:
         # Check existing manga row in Floppy's database
         # ======================================================================
-        existing = self.existing_media[media_type][source].get(media_id)
+        existing = self.existing_by_mu.get(media_id)
 
         if existing is not None:
             existing_progress = existing.progress or 0
@@ -413,23 +668,26 @@ class MangaUpdatesImporter:
         ]
         synopsis = series_meta.get("description") or ""
 
-        item, _ = app.models.Item.objects.get_or_create(
-            media_id=media_id,
-            source=source,
-            media_type=media_type,
-            defaults={
-                **app.models.Item.title_fields_from_metadata(
-                    {
-                        "title": title,
-                        "localized_title": title,
-                        "original_title": None,
-                    }
-                ),
-                "image": image_url,
-                "genres": genres_list,
-                "synopsis": synopsis,
-            },
-        )
+        item = self._mangabaka_item(media_id, title)
+        if item is None:
+            self.stayed_on_mu.append(title)
+            item, _ = app.models.Item.objects.get_or_create(
+                media_id=media_id,
+                source=source,
+                media_type=media_type,
+                defaults={
+                    **app.models.Item.title_fields_from_metadata(
+                        {
+                            "title": title,
+                            "localized_title": title,
+                            "original_title": None,
+                        }
+                    ),
+                    "image": image_url,
+                    "genres": genres_list,
+                    "synopsis": synopsis,
+                },
+            )
 
         # 5. Build user tracking model instance
         now_dt = timezone.now()

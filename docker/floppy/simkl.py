@@ -1,6 +1,7 @@
 import logging
 import time
 from collections import defaultdict
+from types import SimpleNamespace
 
 import requests
 from django.apps import apps
@@ -15,11 +16,38 @@ from app import cache_utils
 from app import helpers as app_helpers
 from app.models import MediaTypes, Sources, Status
 from app.providers import credentials, services
+from app.services.watch_state import PROJECTED_MEDIA_TYPES
 from integrations import import_progress
 from integrations.imports import helpers, remote_removals
 from integrations.imports.helpers import MediaImportError, MediaImportUnexpectedError
 
 logger = logging.getLogger(__name__)
+
+
+def publish_in_place_update(user, model, objs, write):
+    """Run ``write`` for rows updated in place and report them like new rows.
+
+    bulk_update sends no save signal. This importer is day scoped
+    (DAY_SCOPED_IMPORTERS), so History and Statistics refresh only the days it
+    reports, and the watched-state projection only sees rows it is told about.
+    The days a row sat on before the update are reported too, since a changed
+    date moves the row off them.
+    """
+    columns = {field.name for field in model._meta.concrete_fields}
+    date_fields = [name for name in ("start_date", "end_date") if name in columns]
+    previous = []
+    if date_fields:
+        previous = [
+            SimpleNamespace(**values)
+            for values in model.objects.filter(
+                pk__in=[obj.pk for obj in objs],
+            ).values(*date_fields)
+        ]
+    helpers.retry_on_lock(write)
+    helpers.note_bulk_rows([*objs, *previous])
+    if model._meta.model_name in PROJECTED_MEDIA_TYPES:
+        helpers.project_imported_watch_state(user, {obj.item_id for obj in objs})
+
 
 SOURCE_LABEL = "SIMKL"
 
@@ -384,7 +412,7 @@ class SimklImporter:
                     default_change_reason="Simkl import",
                 )
 
-            helpers.retry_on_lock(do_update)
+            publish_in_place_update(self.user, model, objs, do_update)
             logger.info(
                 "Smart-diff updated %d %s row(s) in-place for user %s",
                 len(objs),

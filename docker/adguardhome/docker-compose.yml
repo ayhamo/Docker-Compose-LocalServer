@@ -16,6 +16,13 @@ services:
     #   - "80:80/tcp"    # Post-Setup Web UI Dashboard Dashboard
     #   - "853:853/tcp"  # DNS-over-TLS (For your Android phone)
     #   - "784:784/udp"  # DNS-over-QUIC (Optional future protocol)
+    # Hardening: no Linux capabilities except binding ports below 1024 (53, 853)
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
     environment:
       - TZ=Europe/Berlin
     volumes:
@@ -33,6 +40,14 @@ services:
       start_period: 30s
   
   cert-sync:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+      - FOWNER
     image: alpine:latest
     container_name: adguard-cert-sync
     restart: unless-stopped

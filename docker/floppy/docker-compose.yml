@@ -30,6 +30,16 @@ services:
     #   - "8000:8000"
 
   redis:
+    # Hardening: no privilege escalation, only the Linux capabilities this service needs
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETUID
+      - SETGID
+      - CHOWN
+      - DAC_OVERRIDE
     image: redis:8-alpine
     container_name: floppy-redis
     restart: unless-stopped
