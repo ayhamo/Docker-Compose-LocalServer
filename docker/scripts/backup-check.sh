@@ -1,5 +1,6 @@
 #!/bin/bash
-# Morning check of the backups the apps make themselves (05:30, after the night's jobs).
+# Morning check of the backups the apps make themselves, plus Backrest and Nextcloud AIO
+# (05:30, after the night's jobs).
 # Each backup reports to its own Uptime Kuma push monitor, like the Sure dump does:
 # up when a new file appeared in the last 26 hours, down otherwise.
 # Push URLs live in .kuma-push-urls next to this script (not in git).
@@ -27,3 +28,4 @@ check "Immich DB Dump"       "/opt/docker/immich/library/backups/immich-db-backu
 check "SparkyFitness Backup" "/opt/docker/sparky-fitness/backup/sparkyfitness_full_backup_*.tar.gz"
 check "Floppy DB Snapshot"   "/opt/docker/floppy/backups/database/db-*.sqlite3"
 check "Backrest Backup"      "/opt/docker/backrest/data/docker-backup/snapshots/*"
+check "Nextcloud AIO Backup" "/mnt/hdd/nextcloud-backup/borg/index.*"
