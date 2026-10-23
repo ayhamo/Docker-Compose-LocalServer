@@ -74,6 +74,7 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | 04:00 | rclone: Backrest repository → Google Drive | root crontab |
 | 04:20 (03:20) | Nextcloud AIO backup to `/mnt/hdd/nextcloud-backup` | Nextcloud AIO (UTC) |
 | 05:00 | rclone: Nextcloud AIO backup → Google Drive | root crontab |
+| 05:30 | Backup check: Immich, SparkyFitness and Floppy dumps and the Backrest snapshot must be under 26 h old; each reports to its own Uptime Kuma push monitor (`scripts/backup-check.sh`) | user crontab |
 | Weekly | `apt upgrade` | by hand |
 
 ## Things you must adapt

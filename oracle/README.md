@@ -18,19 +18,21 @@ A second, public-facing server next to the home server: an Oracle Cloud **Always
 
 ## Scheduled jobs (Oracle VM)
 
-All times Europe/Berlin, read from the VM's timers and crontab. Same order as the home server ([schedule](../README.md#scheduled-jobs-home-server)): maintenance first, backups next, reboot last. Unlike the home server, OS updates install themselves, because nobody logs in here every week. Rows marked *planned* are added as services move in.
+All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, cert reload 02:30, backup 03:15, upload 04:00. OS updates install only after the backup and upload, and a reboot comes last. Unlike the home server, OS updates install themselves, because nobody logs in here every week. Rows marked *planned* are added as services move in.
 
 | When | Job | Runs from |
 |---|---|---|
 | 00:00 | Log rotation and package-database backup (Ubuntu defaults) | systemd |
+| 01:00 | *planned:* Dockhand update check, as on the home server | Dockhand, through its agent |
+| Mon 01:00 | Docker cleanup: images and build cache unused for 7 days (same slot as Dockhand's prune at home) | user crontab |
 | 02:00 | apt: download package lists | systemd `apt-daily.timer` |
 | 02:30 | *planned:* AdGuard cert reload, as on the home server | user crontab |
-| 03:00 | Unattended upgrades: Ubuntu security and regular updates; old kernels and unused packages removed | systemd `apt-daily-upgrade.timer` |
-| 04:30 | Reboot, only if an update requires it | unattended-upgrades |
-| Sun 05:00 | Docker cleanup: images and build cache unused for 7 days | user crontab |
+| 03:15 | *planned:* backup, as on the home server | – |
+| 04:00 | *planned:* upload of that backup to Google Drive, as on the home server | – |
+| 04:15 | Unattended upgrades: Ubuntu security and regular updates; old kernels and unused packages removed | systemd `apt-daily-upgrade.timer` |
+| 04:45 | Reboot, only if an update requires it | unattended-upgrades |
 | Weekly (Mon, random time) | SSD trim | systemd `fstrim.timer` |
 | Continuous | Tailscale updates itself; NPM renews its certificates | Tailscale, NPM |
-| *planned* | Container image updates | Dockhand, through its agent |
 
 ## Host configuration
 
@@ -47,17 +49,17 @@ AllowUsers ubuntu
 `/etc/apt/apt.conf.d/52homelab-unattended`
 ```
 // Homelab: also install normal Ubuntu updates automatically (not only security),
-// remove unused kernels/deps, and reboot at 04:30 when an update needs it.
+// remove unused kernels/deps, and reboot at 04:45 when an update needs it.
 Unattended-Upgrade::Allowed-Origins {
         "${distro_id}:${distro_codename}-updates";
 };
 Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
 Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+Unattended-Upgrade::Automatic-Reboot-Time "04:45";
 ```
 
-`/etc/systemd/system/apt-daily.timer.d/override.conf` (and the same for `apt-daily-upgrade.timer` with `03:00`)
+`/etc/systemd/system/apt-daily.timer.d/override.conf` (and the same for `apt-daily-upgrade.timer` with `04:15`)
 ```
 [Timer]
 # Homelab: fixed nightly schedule
@@ -98,8 +100,8 @@ net.ipv4.ip_nonlocal_bind = 1
 
 Crontab of `ubuntu`
 ```
-# Weekly Docker cleanup (docker-cleanup): unused images and build cache older than 7 days
-0 5 * * 0 docker image prune -af --filter until=168h >/dev/null && docker builder prune -af --filter until=168h >/dev/null
+# Weekly Docker cleanup (docker-cleanup), Monday 01:00 like Dockhand prune at home: images and build cache unused for 7 days
+0 1 * * 1 docker image prune -af --filter until=168h >/dev/null && docker builder prune -af --filter until=168h >/dev/null
 ```
 
 Also: `rpcbind` disabled and masked (it listened on port 111 for nothing), timezone Europe/Berlin, `tailscale set --auto-update=true`.

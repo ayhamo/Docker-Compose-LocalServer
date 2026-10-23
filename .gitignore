@@ -2,3 +2,6 @@
 .env
 **/.env
 !**/.env.example
+
+# Uptime Kuma push URLs (they contain tokens)
+.kuma-push-urls
