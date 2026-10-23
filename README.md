@@ -50,6 +50,32 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 | EVE.js | `evejs` | Private game server, deployed with `manage.sh` from a release zip | host `26000`–`26003`, `5222`, `40110`–`40111` |
 | W101 server | `w101server` | Private game server ([Imlight](https://github.com/Revive101/Imlight)), built with `setup.sh` | host `12000`, `12333`, `12500` |
 
+## Oracle Cloud VM
+
+A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet, starting with NPM as the public front door and AdGuard DNS-over-TLS for the phone, while the data stays at home. SSH and every admin UI are reachable over Tailscale only, and a Tailscale ACL stops the VM from reaching anything at home. Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
+
+## Scheduled jobs (home server)
+
+All times Europe/Berlin, checked against the jobs' real run times. Apps that schedule in UTC run one hour earlier on the clock in winter (shown in brackets). Every app dump finishes before Backrest at 03:15, so Backrest always picks up last night's copies. The Oracle VM has its own schedule in [oracle/README.md](oracle/README.md).
+
+| When | Job | Runs from |
+|---|---|---|
+| Every 30 min (:13, :43) | deSEC DynDNS update of the home IP, with an Uptime Kuma heartbeat | root crontab |
+| 00:00 Mon–Fri (23:00 Sun–Thu) | Sure: stock price import | Sure (UTC) |
+| 00:00 on the 1st | Backrest prune and check | Backrest |
+| 01:00 | Dockhand: check all containers for updates (no auto-install) and cleanups; Mondays also prune unused images | Dockhand |
+| 01:10 (00:10) | SparkyFitness full backup | SparkyFitness (UTC) |
+| 01:30 | Floppy: AniList and SIMKL import | Floppy |
+| 02:30 | AdGuard cert reload: restarts AdGuard if NPM renewed the certificate (`adguardhome/cert-reload.sh`) | user crontab |
+| 02:37 | Floppy database snapshot, 7 kept (`floppy/backups/database/`) | Floppy |
+| 02:40 (01:40) | Immich database dump, 7 kept (`immich/library/backups/`) | Immich (UTC) |
+| 02:50 | Sure database dump, 7 days kept (`sure/backup-db.sh`) | user crontab |
+| 03:15 | Backrest backup of `/opt/docker` (7 daily, 4 weekly, 6 monthly) | Backrest |
+| 04:00 | rclone: Backrest repository → Google Drive | root crontab |
+| 04:20 (03:20) | Nextcloud AIO backup to `/mnt/hdd/nextcloud-backup` | Nextcloud AIO (UTC) |
+| 05:00 | rclone: Nextcloud AIO backup → Google Drive | root crontab |
+| Weekly | `apt upgrade` | by hand |
+
 ## Things you must adapt
 
 - **Domain.** Use your own instead of `yourdomain.dedyn.io`.
