@@ -1,0 +1,26 @@
+services:
+  crowdsec:
+    # Reads the NPM logs, detects attacks (scans, brute force, known CVEs) and decides bans.
+    # The bans are enforced by crowdsec-firewall-bouncer on the host (iptables, INPUT + DOCKER-USER).
+    image: crowdsecurity/crowdsec:latest
+    container_name: crowdsec
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Berlin
+      COLLECTIONS: "crowdsecurity/nginx-proxy-manager crowdsecurity/nginx crowdsecurity/base-http-scenarios crowdsecurity/http-cve crowdsecurity/whitelist-good-actors"
+    ports:
+      - "127.0.0.1:8080:8080"     # local API, only for the firewall bouncer on this host
+    volumes:
+      - ./config:/etc/crowdsec
+      - ./data:/var/lib/crowdsec/data
+      - ./acquis.yaml:/etc/crowdsec/acquis.d/npm.yaml:ro
+      - ../nginx-proxy-manager/data/logs:/var/log/npm:ro
+    # Hardening: no privilege escalation
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "cscli", "lapi", "status"]
+      interval: 600s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

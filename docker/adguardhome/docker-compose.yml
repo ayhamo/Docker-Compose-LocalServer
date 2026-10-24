@@ -82,3 +82,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  adguardhome-sync:
+    # Copies these AdGuard settings (filters, rules, rewrites, clients, DNS settings)
+    # to the AdGuard on the Oracle VM every hour. Home is always the origin; never edit the VM copy.
+    image: ghcr.io/bakito/adguardhome-sync:latest
+    container_name: adguardhome-sync
+    restart: unless-stopped
+    command: run
+    # Hardening: no privilege escalation, no Linux capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    env_file: .env                                # ORIGIN_/REPLICA1_ USERNAME + PASSWORD (not in git)
+    environment:
+      ORIGIN_URL: http://192.168.0.214:8880       # this AdGuard (host network)
+      REPLICA1_URL: http://<ORACLE-TAILSCALE-IP>:8880     # VM AdGuard UI, over Tailscale
+      CRON: "0 * * * *"                           # hourly
+      RUN_ON_START: "true"
+      API_PORT: "0"                               # no web UI / API of its own
+      # The VM keeps its own TLS settings (different ports, DoQ off)
+      FEATURES_TLS_CONFIG: "false"
+      FEATURES_DHCP_SERVER_CONFIG: "false"
+      FEATURES_DHCP_STATIC_LEASES: "false"

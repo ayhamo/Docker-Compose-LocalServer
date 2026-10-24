@@ -1,0 +1,13 @@
+[Unit]
+Description=GeoIP allow-list for public 80/443 (DE, KW)
+After=docker.service network-online.target
+Wants=network-online.target
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/geoip-allow.sh apply
+
+[Install]
+WantedBy=multi-user.target docker.service

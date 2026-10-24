@@ -1,0 +1,9 @@
+[Unit]
+Description=Weekly GeoIP list refresh (Monday 01:10, next to the Monday cleanup)
+
+[Timer]
+OnCalendar=Mon *-*-* 01:10
+Persistent=true
+
+[Install]
+WantedBy=timers.target

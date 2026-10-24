@@ -1,0 +1,20 @@
+services:
+  hawser:
+    # Dockhand agent: lets the home Dockhand manage this VM (standard mode:
+    # home connects here, the VM never connects to home)
+    image: ghcr.io/finsys/hawser:latest
+    container_name: hawser
+    restart: unless-stopped
+    ports:
+      - "<TAILSCALE-IP>:2376:2376"   # Tailscale only, never public
+    env_file: .env                  # TOKEN from Dockhand (not in git); Hawser refuses to start without it
+    environment:
+      - AGENT_NAME=oracle-homelab
+      # Same layout as home: stacks live in /opt/docker/<app>
+      - STACKS_DIR=/opt/docker
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mapping the root docker dir so Dockhand can see your compose files (same as home)
+      - /opt/docker:/opt/docker

@@ -1,0 +1,23 @@
+services:
+  uptime-kuma:
+    # Watches the home server from outside (home internet, home heartbeat) and alerts on Discord.
+    # Started from a copy of the home Kuma database: same login and Discord alert, home monitors removed.
+    image: louislam/uptime-kuma:2
+    container_name: uptime-kuma
+    restart: unless-stopped
+    ports:
+      - "<TAILSCALE-IP>:3001:3001"   # web UI + push URLs: Tailscale only, never public
+    volumes:
+      - ./data:/app/data
+    networks:
+      - proxy-net                     # VM NPM reaches it as uptime-kuma:3001 (Tailscale-only host)
+    healthcheck:
+      test: ["CMD-SHELL", "node extra/healthcheck.js || exit 1"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+networks:
+  proxy-net:
+    external: true

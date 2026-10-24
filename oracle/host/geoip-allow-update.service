@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh the GeoIP country lists and re-apply
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/geoip-allow.sh update

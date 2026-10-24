@@ -5,3 +5,7 @@
 
 # Uptime Kuma push URLs (they contain tokens)
 .kuma-push-urls
+
+# deSEC token and state of scripts/dns-failover.py
+.desec-token
+.dns-failover.state

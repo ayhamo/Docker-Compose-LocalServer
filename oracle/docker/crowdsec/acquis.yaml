@@ -1,0 +1,16 @@
+# NPM proxy hosts write NPM-format logs
+filenames:
+  - /var/log/npm/proxy-host-*_access.log
+  - /var/log/npm/proxy-host-*_error.log
+labels:
+  type: nginx-proxy-manager
+# keep watching the folder: hosts created later get their log file then
+force_inotify: true
+---
+# The default site and fallback write plain nginx-format logs
+filenames:
+  - /var/log/npm/default-host_*.log
+  - /var/log/npm/fallback_*.log
+labels:
+  type: nginx
+force_inotify: true
