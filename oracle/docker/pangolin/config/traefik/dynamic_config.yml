@@ -1,0 +1,59 @@
+http:
+  middlewares:
+    badger:
+      plugin:
+        badger:
+          disableForwardAuth: true
+    tailscale-only:
+      ipAllowList:
+        sourceRange: ["100.64.0.0/10"]
+    tailscale-or-docker:
+      ipAllowList:
+        sourceRange: ["100.64.0.0/10", "172.16.0.0/12"]   # + Pangolin server-to-server calls (Docker networks)
+
+  routers:
+    # Pangolin dashboard: Tailscale only for now (make it public when friends need to log in)
+    next-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && !PathPrefix(`/api/v1`)"
+      service: next-service
+      entryPoints: [websecure]
+      middlewares: [tailscale-only, badger]
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: "yourdomain.dedyn.io"
+            sans: ["*.yourdomain.dedyn.io"]
+    api-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && PathPrefix(`/api/v1`)"
+      service: api-service
+      entryPoints: [websecure]
+      middlewares: [tailscale-only, badger]
+      tls:
+        certResolver: letsencrypt
+    ws-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`)"
+      service: api-service
+      entryPoints: [websecure]
+      middlewares: [tailscale-only, badger]
+      tls:
+        certResolver: letsencrypt
+
+    # Pocket ID: routed here, not as a Pangolin resource, so the login provider never depends on the gate it feeds
+    pocket-id:
+      rule: "Host(`oracle-pocketid.yourdomain.dedyn.io`)"
+      service: pocket-id
+      entryPoints: [websecure]
+      middlewares: [tailscale-or-docker]
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    next-service:
+      loadBalancer:
+        servers: [{url: "http://pangolin:3002"}]
+    api-service:
+      loadBalancer:
+        servers: [{url: "http://pangolin:3000"}]
+    pocket-id:
+      loadBalancer:
+        servers: [{url: "http://pocket-id:1411"}]

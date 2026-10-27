@@ -1,0 +1,54 @@
+# Pangolin = public gateway: Traefik proxies, Pangolin (dashboard + Badger plugin) decides who gets in.
+# No Gerbil/Newt tunnels: home is reached over Tailscale, and Pangolin's VPN would clash with Tailscale's 100.64.0.0/10.
+services:
+  pangolin:
+    image: docker.io/fosrl/pangolin:1.25.3
+    container_name: pangolin
+    restart: unless-stopped
+    volumes:
+      - ./config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/v1/"]
+      interval: "10s"
+      timeout: "10s"
+      retries: 15
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+
+  traefik:
+    image: docker.io/traefik:v3.7
+    container_name: traefik
+    restart: unless-stopped
+    depends_on:
+      pangolin:
+        condition: service_healthy
+    command:
+      - --configFile=/etc/traefik/traefik_config.yml
+    env_file: .env                  # DESEC_TOKEN (wildcard cert via DNS-01)
+    environment:
+      DESEC_PROPAGATION_TIMEOUT: "600"
+      DESEC_POLLING_INTERVAL: "10"
+      LEGO_DISABLE_CNAME_SUPPORT: "true"   # the wildcard CNAME would send _acme-challenge to the apex
+    ports:
+      - "80:80"                     # public: redirect to https
+      - "443:443"                   # public: HTTPS (GeoIP + CrowdSec filter on the host)
+    volumes:
+      - ./config/traefik:/etc/traefik:ro
+      - ./config/letsencrypt:/letsencrypt
+      - ./config/traefik/logs:/var/log/traefik
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      default:
+        aliases:
+          # public DNS sends this name home; Pangolin's login calls reach Pocket ID through Traefik here
+          - oracle-pocketid.yourdomain.dedyn.io
+      proxy-net: {}                 # reaches the apps by container name
+
+networks:
+  default:
+    name: pangolin
+  proxy-net:
+    external: true

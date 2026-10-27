@@ -1,0 +1,26 @@
+# Gerbil is not deployed; this block only satisfies Pangolin's config check
+gerbil:
+    base_endpoint: "oracle-pangolin.yourdomain.dedyn.io"
+    start_port: 51820
+app:
+    dashboard_url: "https://oracle-pangolin.yourdomain.dedyn.io"
+    log_level: "info"
+    save_logs: false
+    telemetry:
+        anonymous_usage: false
+domains:
+    domain1:
+        base_domain: "yourdomain.dedyn.io"
+        cert_resolver: "letsencrypt"
+        prefer_wildcard_cert: true
+server:
+    secret: "<openssl rand -hex 32>"
+    cors:
+        origins: ["https://oracle-pangolin.yourdomain.dedyn.io"]
+        methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+        allowed_headers: ["X-CSRF-Token", "Content-Type"]
+        credentials: false
+flags:
+    require_email_verification: false
+    disable_signup_without_invite: true
+    disable_user_create_org: true

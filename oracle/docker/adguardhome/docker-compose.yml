@@ -13,7 +13,7 @@ services:
       - "<TAILSCALE-IP>:8880:80/tcp"   # web UI: Tailscale only, never public
     networks:
       - default
-      - proxy-net                     # VM NPM reaches the UI as adguardHome:80 (Tailscale-only host)
+      - proxy-net                     # Traefik (Pangolin) reaches the UI as adguardHome:80 (Tailscale-only resource)
     # Hardening: no Linux capabilities except binding ports below 1024 (53, 80, 853)
     cap_drop:
       - ALL
@@ -26,7 +26,7 @@ services:
     volumes:
       - ./conf:/opt/adguardhome/conf
       - ./work:/opt/adguardhome/work
-      # read-only access to the TLS cert and key copied from NPM
+      # read-only access to the TLS cert and key exported from Traefik (Pangolin)
       - ./certs:/opt/adguardhome/certs:ro
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/"]
@@ -36,6 +36,12 @@ services:
       start_period: 30s
 
   cert-sync:
+    # Exports the wildcard cert from Traefik's (Pangolin) acme.json as PEM for AdGuard, every hour.
+    # cert-reload.sh (cron 02:30) restarts AdGuard when the served cert differs.
+    image: ldez/traefik-certs-dumper:v2.11.4
+    container_name: adguard-cert-sync
+    restart: unless-stopped
+    network_mode: none
     # Hardening: no privilege escalation, only the Linux capabilities this service needs
     security_opt:
       - no-new-privileges:true
@@ -44,32 +50,28 @@ services:
     cap_add:
       - DAC_OVERRIDE
       - FOWNER
-    image: alpine:latest
-    container_name: adguard-cert-sync
-    restart: unless-stopped
-    network_mode: none
     volumes:
-      # Read Nginx Proxy Manager certificates
-      - ../nginx-proxy-manager/letsencrypt:/npm-certs:ro
+      # Read Traefik's certificate store
+      - ../pangolin/config/letsencrypt:/traefik:ro
       # Write to AdGuard certs directory
       - ./certs:/adguard-certs
+    tmpfs:
+      - /dump                         # all exported certs + ACME account key stay in memory only
     entrypoint: ["/bin/sh", "-c"]
     command: >
       "while true; do
-
-        if [ -f /npm-certs/live/npm-3/fullchain.pem ] && [ -f /npm-certs/live/npm-3/privkey.pem ]; then
-          cp -L /npm-certs/live/npm-3/fullchain.pem /adguard-certs/fullchain.pem;
-          cp -L /npm-certs/live/npm-3/privkey.pem /adguard-certs/privkey.pem;
+        traefik-certs-dumper file --version v3 --source /traefik/acme.json --dest /dump --domain-subdir --crt-name fullchain --crt-ext .pem --key-name privkey --key-ext .pem >/dev/null 2>&1;
+        if [ -s /dump/yourdomain.dedyn.io/fullchain.pem ] && [ -s /dump/yourdomain.dedyn.io/privkey.pem ]; then
+          cp /dump/yourdomain.dedyn.io/fullchain.pem /adguard-certs/fullchain.pem;
+          cp /dump/yourdomain.dedyn.io/privkey.pem /adguard-certs/privkey.pem;
           chmod 644 /adguard-certs/fullchain.pem;
           chmod 600 /adguard-certs/privkey.pem;
           date +%s > /adguard-certs/.last_sync;
-          echo \"[$$(date)] SUCCESS: SSL certificates synchronized from NPM.\";
+          echo \"[$$(date)] SUCCESS: wildcard cert exported from Traefik.\";
         else
-          echo \"[$$(date)] ERROR: Files missing. Listing /npm-certs contents:\";
-          ls -la /npm-certs;
-          ls -la /npm-certs/live/npm-3 2>/dev/null || true;
+          echo \"[$$(date)] ERROR: yourdomain.dedyn.io cert not found in Traefik acme.json\";
         fi;
-
+        rm -rf /dump/*;
         sleep 3600 & wait $${!};
       done"
     healthcheck:

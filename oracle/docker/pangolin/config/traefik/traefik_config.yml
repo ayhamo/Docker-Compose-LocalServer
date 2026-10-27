@@ -1,0 +1,42 @@
+providers:
+  http:
+    endpoint: "http://pangolin:3001/api/v1/traefik-config"
+    pollInterval: "5s"
+  file:
+    filename: "/etc/traefik/dynamic_config.yml"
+experimental:
+  plugins:
+    badger:
+      moduleName: "github.com/fosrl/badger"
+      version: "v1.7.0"   # v1.8.0 fails Traefik's plugin integrity check (2026-10-27)
+log:
+  level: "INFO"
+accessLog:
+  filePath: "/var/log/traefik/access.log"   # read by CrowdSec
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      dnsChallenge:
+        provider: desec
+        resolvers: ["ns1.desec.io:53", "ns2.desec.org:53"]
+      email: "you@example.com"
+      storage: "/letsencrypt/acme.json"
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+    transport:
+      respondingTimeouts:
+        readTimeout: "30m"
+    http:
+      encodedCharacters:
+        allowEncodedSlash: true
+        allowEncodedQuestionMark: true
+serversTransport:
+  insecureSkipVerify: true

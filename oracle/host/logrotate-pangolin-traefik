@@ -1,0 +1,10 @@
+# Traefik (Pangolin) access log, read by CrowdSec; Traefik keeps the file open, so copytruncate
+/opt/docker/pangolin/config/traefik/logs/access.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

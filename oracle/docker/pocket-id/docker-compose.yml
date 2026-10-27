@@ -1,0 +1,28 @@
+# Pocket ID: passkey login (OIDC provider) for Pangolin and for apps with native OIDC.
+# No published port: reached only through Traefik on proxy-net.
+services:
+  pocket-id:
+    image: ghcr.io/pocket-id/pocket-id:v2
+    container_name: pocket-id
+    restart: unless-stopped
+    env_file: .env                  # ENCRYPTION_KEY (600)
+    environment:
+      APP_URL: "https://oracle-pocketid.yourdomain.dedyn.io"
+      TRUST_PROXY: "true"
+      TZ: Europe/Berlin
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "/app/pocket-id", "healthcheck"]
+      interval: 1m30s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - proxy-net
+
+networks:
+  proxy-net:
+    external: true

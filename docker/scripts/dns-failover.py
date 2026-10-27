@@ -4,7 +4,7 @@
 # and reports each check to the Uptime Kuma push monitor "Oracle DNS-over-TLS".
 # 3 failed checks in a row -> the phone's DoT name points to home (its A record is deleted,
 # so the wildcard CNAME to the DDNS name applies).
-# Back to the VM only by hand for now (AUTO_BACK_TO_VM = False): dns-failover.py --to-vm
+# 10 good checks in a row while on home -> it points back to the VM (or by hand: --to-vm).
 # It never switches when this server has no internet or the home AdGuard is down.
 # deSEC token in .desec-token, push URL in .kuma-push-urls (both next to this script, not in git).
 import base64, json, os, socket, ssl, struct, sys, time, urllib.parse, urllib.request
@@ -16,7 +16,7 @@ VM_IP = "<ORACLE-PUBLIC-IP>"
 HOME_DNS = "192.168.0.214"
 MONITOR = "Oracle DNS-over-TLS"
 FAILS_TO_HOME, OKS_TO_VM = 3, 10
-AUTO_BACK_TO_VM = False  # switch back with --to-vm until the automatic way is tested
+AUTO_BACK_TO_VM = True  # tested 2026-10-24: switches back after 10 good checks
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 STATE = ".dns-failover.state"

@@ -52,7 +52,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 
 ## Oracle Cloud VM
 
-A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet, starting with NPM as the public front door and AdGuard DNS-over-TLS for the phone, while the data stays at home. SSH and every admin UI are reachable over Tailscale only, and a Tailscale ACL stops the VM from reaching anything at home. Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
+A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet, starting with Pangolin (Traefik with Pocket ID passkey login) as the public gateway and AdGuard DNS-over-TLS for the phone, while the data stays at home. SSH and every admin UI are reachable over Tailscale only, and a Tailscale ACL stops the VM from reaching anything at home. Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
 
 ## Scheduled jobs (home server)
 
@@ -61,7 +61,7 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | When | Job | Runs from |
 |---|---|---|
 | Every 30 min (:13, :43) | deSEC DynDNS update of the home IP, with an Uptime Kuma heartbeat | root crontab |
-| Every minute | Phone DNS failover: DNS-over-TLS check of the Oracle VM as the phone uses it, reported to Uptime Kuma; after 3 failures the phone's DoT name points home; back to the VM by hand with `--to-vm` for now (`scripts/dns-failover.py`) | user crontab |
+| Every minute | Phone DNS failover: DNS-over-TLS check of the Oracle VM as the phone uses it, reported to Uptime Kuma; after 3 failures the phone's DoT name points home, after 10 good checks back to the VM (`scripts/dns-failover.py`) | user crontab |
 | Every minute | Heartbeat to the Uptime Kuma on the Oracle VM (silence there = home down) | user crontab |
 | Hourly (:00) | AdGuard settings → Oracle VM's AdGuard (filters, rules, rewrites, clients, DNS settings; not TLS) | adguardhome-sync (in the `adguardhome` stack) |
 | 00:00 Mon–Fri (23:00 Sun–Thu) | Sure: stock price import | Sure (UTC) |
