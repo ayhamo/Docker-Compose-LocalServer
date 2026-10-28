@@ -1,5 +1,8 @@
 http:
   middlewares:
+    show-403:
+      replacePath:
+        path: "/403.html"
     error-pages:
       errors:
         status: ["403", "404"]
@@ -81,6 +84,16 @@ http:
       middlewares: [navidrome-rest-ratelimit]
       tls:
         certResolver: letsencrypt
+    # Tailscale-only apps: from the internet a styled 403 instead of Pangolin's plain "Unauthorized"
+    tailscale-only-apps-public:
+      rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`)"
+      priority: 10000
+      service: error-pages
+      entryPoints: [websecure]
+      middlewares: [show-403]
+      tls:
+        certResolver: letsencrypt
+
     # Any other name under the domain (no Pangolin resource): a styled 404 instead of Traefik's plain text
     unknown-host:
       rule: "HostRegexp(`.+`)"

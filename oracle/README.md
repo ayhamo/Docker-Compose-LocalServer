@@ -56,7 +56,7 @@ Both block at the firewall, before a request reaches Traefik. Neither touches SS
 `oracle-pangolin`, `oracle-pocketid`, `oracle-navidrome`, `oracle-uptimekuma` and `oracle-crowdsec` under `yourdomain.dedyn.io` all use the wildcard certificate. Public DNS sends them to the VM through the wildcard record; the home AdGuard points them at the VM's Tailscale IP.
 
 - **On Tailscale:** Tailscale already proves who you are, so the apps open straight to their own login. Each is a Pangolin resource (site type *Local*, targets by container name) with the rule: from `100.64.0.0/10` → bypass the gateway login.
-- **Tailscale-only:** Kuma and CrowdSec Web UI add a second rule, `DROP /*`, so from the internet they answer `401` with no login page at all.
+- **Tailscale-only:** Kuma and CrowdSec Web UI add a second rule, `DROP /*`, so from the internet they get no login page at all; a Traefik router in front (`!ClientIP(100.64.0.0/10)`) shows the styled `403` page instead of Pangolin's plain `401`.
 - **From the internet:** first the host firewall (GeoIP DE/KW, CrowdSec), then the Pocket ID passkey (*skip to identity provider*: no Pangolin login page in between), then the app's own login. Pocket ID is public so this login can happen. Of Pangolin's dashboard, the internet reaches only the resource login (`/auth/resource/`, the Pocket ID callback `/auth/idp/`, page files `/_next/`, `favicon.ico`). Everything else, including the dashboard's own login page (where cancelling Pocket ID would otherwise land) and its email + password login (the server admin account, kept as a break-glass login), answers only over Tailscale (`ipAllowList`, internet: `403`). Sign-ups are closed in both apps. The home gateway check fetches `favicon.ico` for that reason. Blocked dashboard pages and names without a resource get styled pages (`error-pages` in the Pangolin compose, the same image as home NPM's) instead of Traefik's plain `403` / `404` text.
 - **Navidrome apps:** `/rest/*` (the Subsonic API, with Navidrome's own login) passes without Pocket ID, so music apps work; Traefik limits it to 10 requests per second per IP (burst 50, then `429`).
 - **Login lifetime:** a Pangolin session lasts 30 days and extends while used; Pocket ID's own sign-in lasts about an hour (default).
@@ -79,6 +79,14 @@ Home apps are published here one by one; everything not published stays reachabl
 - **The home server itself** resolves through the router, which now answers with the VM. `/etc/hosts` pins `uptimekuma.yourdomain.dedyn.io` to `127.0.0.1` / `::1`, so its cron pushes still reach the home Kuma.
 
 To publish another app: Pangolin resource (as above), a line in `http_top.conf` plus `nginx -s reload` in the NPM container, the AdGuard self-rewrite and the two rules. To unpublish, undo the three.
+
+## Navidrome (music, moving here from home)
+
+[`docker/navidrome`](docker/navidrome/) is the home stack with two changes: `user: "1001:1001"` (the VM's `ubuntu`) and the library in `./music` on the VM. It runs everything home runs: Navidrome with its plugins, AudioMuse-AI (Flask, worker, Postgres; the image has ARM builds) and `radio-relay` (built here from [`../docker/navidrome/radio-relay`](../docker/navidrome/radio-relay/)).
+
+- **Copied from home on 2026-10-28:** Navidrome's database (users, playlists, play counts, radios, plugin settings) through SQLite's online backup, the plugins, the radio images, `.env` (Last.fm keys), and AudioMuse's database through `pg_dump` / `pg_restore` (Postgres data files are not portable between x86 and ARM). Not copied: music, `artwork/hashed` and `cache` (rebuilt on demand).
+- **Music not there yet.** A full scan marks every song *missing* instead of deleting it, so playlists, play counts and AudioMuse's matches come back when the files arrive at the same paths.
+- **Public access:** see *Admin links* above (`/rest` past Pocket ID with a rate limit).
 
 ## Uptime Kuma (watching home)
 
