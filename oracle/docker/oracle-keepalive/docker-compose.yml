@@ -10,6 +10,12 @@ services:
     volumes:
       - ./keepalive.py:/keepalive.py:ro
     mem_limit: 2300m
+    healthcheck:                  # healthy while ~2 GB is really held in RAM
+      test: ["CMD", "python3", "-c", "import sys; rss=int([l for l in open('/proc/1/status') if l.startswith('VmRSS')][0].split()[1]); sys.exit(rss < 1900*1024)"]
+      interval: 5m
+      timeout: 10s
+      retries: 2
+      start_period: 1m
     cpu_shares: 2                 # lowest priority: real apps always win the CPU
     network_mode: none
     read_only: true

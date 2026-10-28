@@ -26,6 +26,11 @@ services:
         condition: service_healthy
     command:
       - --configFile=/etc/traefik/traefik_config.yml
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     env_file: .env                  # DESEC_TOKEN (wildcard cert via DNS-01)
     environment:
       DESEC_PROPAGATION_TIMEOUT: "600"

@@ -13,6 +13,11 @@ services:
     read_only: true
     user: "65534:65534"
     mem_limit: 64m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null --header \"Authorization: Bearer $$TOKEN\" http://127.0.0.1:27973/api/sysinfo/all"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
     security_opt:
       - no-new-privileges:true
     cap_drop:
