@@ -1,0 +1,11 @@
+# Homelab: Navidrome's log file (ND_LOGFILE), read by CrowdSec. Navidrome keeps it open, so copy then truncate.
+/opt/docker/navidrome/navidrome-data/logs/navidrome.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su ubuntu ubuntu
+}

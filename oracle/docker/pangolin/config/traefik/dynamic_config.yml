@@ -1,5 +1,10 @@
 http:
   middlewares:
+    strip-proxy-auth:     # on every request (entrypoint): nobody can send a login header to Navidrome
+      headers:
+        customRequestHeaders:
+          Remote-User: ""
+          X-Nd-Proxy-User-<RANDOM_HEX>: ""
     show-403:
       replacePath:
         path: "/403.html"

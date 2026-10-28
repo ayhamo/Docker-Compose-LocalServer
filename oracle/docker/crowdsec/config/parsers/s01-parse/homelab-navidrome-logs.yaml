@@ -1,0 +1,17 @@
+# Homelab: Navidrome log (logfmt) -> failed logins from the web UI and from music apps (Subsonic API /rest).
+# The hub's sdwilsh/navidrome-logs only sees web logins; app logins answer HTTP 200, so only Navidrome's own log shows them.
+filter: "evt.Parsed.program == 'navidrome' && ParseKV(evt.Parsed.message, evt.Unmarshaled, 'navidrome') in ['', nil]"
+onsuccess: next_stage
+name: homelab/navidrome-logs
+description: "Parses failed logins (web and Subsonic API) from Navidrome's log file"
+statics:
+  - meta: service
+    value: navidrome
+  - meta: log_type
+    expression: "evt.Unmarshaled.navidrome.msg in ['API: Invalid login', 'Unsuccessful login'] ? 'navidrome_failed_auth' : ''"
+  - meta: source_ip
+    expression: "evt.Unmarshaled.navidrome.remoteAddr"
+  - meta: username
+    expression: "evt.Unmarshaled.navidrome.username"
+  - target: evt.StrTime
+    expression: "evt.Unmarshaled.navidrome.time"

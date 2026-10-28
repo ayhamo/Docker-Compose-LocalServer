@@ -15,6 +15,7 @@ services:
       - ./data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro
       - ../pangolin/config/traefik/logs:/var/log/traefik:ro
+      - ../navidrome/navidrome-data/logs:/var/log/navidrome:ro   # Navidrome's log (failed logins, real client IPs)
     # Hardening: no privilege escalation
     security_opt:
       - no-new-privileges:true
