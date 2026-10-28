@@ -99,6 +99,16 @@ http:
       tls:
         certResolver: letsencrypt
 
+    # Pocket ID admin (pages + admin-only API, from the v2.19.1 routes): Tailscale only. Login, passkeys, "My account" and OIDC stay public.
+    pocket-id-admin-public:
+      rule: 'Host(`oracle-pocketid.yourdomain.dedyn.io`) && !ClientIP(`100.64.0.0/10`) && (PathPrefix(`/settings/admin`) || PathPrefix(`/api/application-configuration/`) || (Path(`/api/application-configuration`) && !Method(`GET`)) || (PathPrefix(`/api/application-images/`) && !Method(`GET`)) || PathPrefix(`/api/custom-claims`) || PathPrefix(`/api/user-groups`) || PathPrefix(`/api/signup-tokens`) || PathPrefix(`/api/apis`) || PathPrefix(`/api/api-access`) || PathPrefix(`/api/scim/`) || PathPrefix(`/api/oidc/logo-presets`) || PathPrefix(`/api/audit-logs/all`) || PathPrefix(`/api/audit-logs/filters/`) || (PathRegexp(`^/api/oidc/clients(/|$)`) && !(Method(`GET`) && PathRegexp(`^/api/oidc/clients/[^/]+/logo$`))) || (PathRegexp(`^/api/oidc/users/[^/]+/`) && !PathPrefix(`/api/oidc/users/me/`)) || Path(`/api/users`) || (PathRegexp(`^/api/users/[^/]+`) && !PathPrefix(`/api/users/me`) && !(Method(`GET`) && PathRegexp(`^/api/users/[^/]+/profile-picture\.png$`))))'
+      priority: 10000
+      service: error-pages
+      entryPoints: [websecure]
+      middlewares: [show-403]
+      tls:
+        certResolver: letsencrypt
+
     # Any other name under the domain (no Pangolin resource): a styled 404 instead of Traefik's plain text
     unknown-host:
       rule: "HostRegexp(`.+`)"
