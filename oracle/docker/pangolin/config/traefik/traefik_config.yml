@@ -35,6 +35,7 @@ entryPoints:
       respondingTimeouts:
         readTimeout: "30m"
     http:
+      middlewares: [strip-proxy-auth@file]   # removes login headers from every request (Navidrome trusts proxy-net)
       encodedCharacters:
         allowEncodedSlash: true
         allowEncodedQuestionMark: true
