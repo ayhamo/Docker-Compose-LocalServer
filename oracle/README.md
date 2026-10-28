@@ -216,7 +216,7 @@ hostname: oracle-homelab
 fqdn: oracle-homelab
 ```
 
-Also: `rpcbind` disabled and masked (it listened on port 111 for nothing), timezone Europe/Berlin, `tailscale set --auto-update=true`.
+Also: `rpcbind` disabled and masked (it listened on port 111 for nothing), timezone Europe/Berlin, `tailscale set --auto-update=true`, and `tailscale set --snat-subnet-routes=false`. Without that last one, Tailscale rewrites the source address of Tailscale connections to Docker's gateway (172.23.0.1) whenever its firewall rules land in front of Docker's (for example after an auto-update), and every "Tailscale only" rule answers 403. The VM routes no subnets, so nothing else changes.
 
 ## Connecting
 
