@@ -5,7 +5,7 @@ services:
     image: ghcr.io/pocket-id/pocket-id:v2
     container_name: pocket-id
     restart: unless-stopped
-    env_file: .env                  # ENCRYPTION_KEY (600)
+    env_file: .env                  # ENCRYPTION_KEY, MAXMIND_LICENSE_KEY (600). Key: https://www.maxmind.com/en/accounts/current/license-key
     environment:
       APP_URL: "https://oracle-pocketid.yourdomain.dedyn.io"
       TRUST_PROXY: "true"
