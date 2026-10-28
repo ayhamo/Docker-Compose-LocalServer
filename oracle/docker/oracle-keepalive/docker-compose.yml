@@ -1,0 +1,20 @@
+# Oracle Always Free idle-reclaim guard (temporary): delete this stack once real services keep the VM busy.
+# Oracle reclaims an idle A1 VM only when CPU (95th pct), network AND memory all stay < 20% for 7 days.
+# Holds ~2 GB of RAM and runs a light CPU burst 12 min per hour (see keepalive.py).
+services:
+  oracle-keepalive:
+    image: python:3.13-alpine
+    container_name: oracle-keepalive
+    restart: unless-stopped
+    command: ["python3", "-u", "/keepalive.py"]
+    volumes:
+      - ./keepalive.py:/keepalive.py:ro
+    mem_limit: 2300m
+    cpu_shares: 2                 # lowest priority: real apps always win the CPU
+    network_mode: none
+    read_only: true
+    user: "65534:65534"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

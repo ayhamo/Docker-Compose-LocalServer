@@ -1,7 +1,6 @@
-#!/usr/bin/env python3
 # Oracle Always Free idle-reclaim guard (temporary, until real services keep the VM busy).
 # Oracle reclaims an idle A1 VM only when CPU (95th pct), network AND memory all stay < 20% for 7 days.
-# Memory: hold ~2 GB of touched RAM (no CPU cost). CPU: 12 min per hour at ~50% of one core (nice 19).
+# Memory: hold ~2 GB of touched RAM (no CPU cost). CPU: 12 min per hour at ~50% of one core (lowest CPU priority, cpu_shares 2).
 import time
 
 HOLD_MB = 2048

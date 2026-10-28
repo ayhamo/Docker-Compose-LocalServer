@@ -204,7 +204,7 @@ Crontab of `ubuntu`
 #30 2 * * * /opt/docker/adguardhome/cert-reload.sh >> /opt/docker/adguardhome/cert-reload.log 2>&1
 ```
 
-`oracle-keepalive.service` ([script](host/oracle-keepalive.py), [unit](host/oracle-keepalive.service)): temporary guard against Oracle's idle reclaim, which stops an Always Free VM when CPU, network and memory all stay under 20% for 7 days. It holds 2 GB of RAM (about 30% in use) and runs a light CPU burst for 12 minutes each hour at the lowest priority. Remove it once real services keep the VM busy: `systemctl disable --now oracle-keepalive`.
+`oracle-keepalive` container ([compose](docker/oracle-keepalive/docker-compose.yml), [script](docker/oracle-keepalive/keepalive.py)): temporary guard against Oracle's idle reclaim, which stops an Always Free VM when CPU, network and memory all stay under 20% for 7 days. It holds 2 GB of RAM (about 35% of the VM in use) and runs a light CPU burst for 12 minutes each hour at the lowest CPU priority, with no network and a read-only filesystem. It runs as a container so Dockhand shows it. Remove it once real services keep the VM busy: `docker compose down` in `/opt/docker/oracle-keepalive`, then delete the folder.
 
 `/etc/logrotate.d/pangolin-traefik`: see [`host/logrotate-pangolin-traefik`](host/logrotate-pangolin-traefik) (daily, 7 kept, `copytruncate` because Traefik keeps the file open).
 
