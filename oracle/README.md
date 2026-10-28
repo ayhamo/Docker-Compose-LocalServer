@@ -204,6 +204,8 @@ Crontab of `ubuntu`
 #30 2 * * * /opt/docker/adguardhome/cert-reload.sh >> /opt/docker/adguardhome/cert-reload.log 2>&1
 ```
 
+`glance-agent` container ([compose](docker/glance-agent/docker-compose.yml)): [Glance agent](https://github.com/glanceapp/agent) that gives the home Dynacat "Oracle Server" widget the VM's CPU, RAM and disk usage. Tailscale only (`<TAILSCALE-IP>:27973`), every request needs the `TOKEN` from `.env`, read-only, no capabilities. The empty `disk/` folder is mounted so the agent can report the boot volume.
+
 `oracle-keepalive` container ([compose](docker/oracle-keepalive/docker-compose.yml), [script](docker/oracle-keepalive/keepalive.py)): temporary guard against Oracle's idle reclaim, which stops an Always Free VM when CPU, network and memory all stay under 20% for 7 days. It holds 2 GB of RAM (about 35% of the VM in use) and runs a light CPU burst for 12 minutes each hour at the lowest CPU priority, with no network and a read-only filesystem. It runs as a container so Dockhand shows it. Remove it once real services keep the VM busy: `docker compose down` in `/opt/docker/oracle-keepalive`, then delete the folder.
 
 `/etc/logrotate.d/pangolin-traefik`: see [`host/logrotate-pangolin-traefik`](host/logrotate-pangolin-traefik) (daily, 7 kept, `copytruncate` because Traefik keeps the file open).

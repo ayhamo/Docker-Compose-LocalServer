@@ -1,0 +1,19 @@
+# Glance agent: CPU, RAM and disk stats of this VM for the home Dynacat "server-stats" widget.
+# Reached over Tailscale only; requests need the TOKEN from .env (600).
+services:
+  glance-agent:
+    image: glanceapp/agent:v0.1.0
+    container_name: glance-agent
+    restart: unless-stopped
+    env_file: .env                  # TOKEN
+    ports:
+      - "<TAILSCALE-IP>:27973:27973"   # Tailscale only
+    volumes:
+      - ./disk:/disk:ro             # empty folder on the boot volume: its usage = the VM disk usage
+    read_only: true
+    user: "65534:65534"
+    mem_limit: 64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
