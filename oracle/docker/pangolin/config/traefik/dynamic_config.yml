@@ -14,17 +14,26 @@ http:
         burst: 50
 
   routers:
-    # Pangolin dashboard + login page: public (GeoIP DE/KW + CrowdSec filter at the host firewall)
+    # Pangolin dashboard and its login page: Tailscale only (internet: 403)
     next-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && !PathPrefix(`/api/v1`)"
       service: next-service
       entryPoints: [websecure]
-      middlewares: [badger]
+      middlewares: [tailscale-only, badger]
       tls:
         certResolver: letsencrypt
         domains:
           - main: "yourdomain.dedyn.io"
             sans: ["*.yourdomain.dedyn.io"]
+    # The only dashboard pages the internet needs: the resource login (Pocket ID) and its files
+    next-public-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && (PathPrefix(`/auth/resource/`) || PathPrefix(`/auth/idp/`) || PathPrefix(`/_next/`) || Path(`/favicon.ico`))"
+      priority: 500
+      service: next-service
+      entryPoints: [websecure]
+      middlewares: [badger]
+      tls:
+        certResolver: letsencrypt
     # Email + password login (the server admin account) only over Tailscale.
     # Pocket ID logins use /api/v1/auth/idp/... and stay reachable from the internet.
     password-login-router:
