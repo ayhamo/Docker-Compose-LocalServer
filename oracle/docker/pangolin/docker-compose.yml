@@ -2,7 +2,7 @@
 # No Gerbil/Newt tunnels: home is reached over Tailscale, and Pangolin's VPN would clash with Tailscale's 100.64.0.0/10.
 services:
   pangolin:
-    image: docker.io/fosrl/pangolin:1.25.3
+    image: docker.io/fosrl/pangolin:latest
     container_name: pangolin
     restart: unless-stopped
     volumes:

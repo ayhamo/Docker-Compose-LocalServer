@@ -1,6 +1,6 @@
 # Oracle Cloud VM (Always Free)
 
-A second, public-facing server next to the home server: an Oracle Cloud **Always Free** ARM VM (2 OCPU, 12 GB RAM, 50 GB disk, Ubuntu 24.04 aarch64). It hosts what has to stay up or face the internet (AdGuard DNS-over-TLS for the phone, the public Pangolin gateway with Pocket ID login) while the home server keeps the data. Compose files live under [`docker/`](docker/), which mirrors `/opt/docker/` on the VM.
+A second, public-facing server next to the home server: an Oracle Cloud **Always Free** ARM VM (2 OCPU, 12 GB RAM, 50 GB disk, Ubuntu 24.04 aarch64). It hosts what has to stay up or face the internet (the public Pangolin gateway with Pocket ID login, which also publishes chosen home apps; Uptime Kuma watching home) while the home server keeps the data. Compose files live under [`docker/`](docker/), which mirrors `/opt/docker/` on the VM.
 
 ## Security layout
 
@@ -10,15 +10,20 @@ A second, public-facing server next to the home server: an Oracle Cloud **Always
                then 80/443 only from DE and KW (GeoIP)
           ─► ③ Docker: Traefik (Pangolin) 80/443 public; admin UIs on the Tailscale IP,
                their links Tailscale-only + Pocket ID login
- Tailscale ─► ④ ACL: the VM is tag:oracle and may reach nothing in the tailnet;
-                 member devices (PC, phone, home server) may reach it
+ Tailscale ─► ④ ACL: the VM is tag:oracle and may reach only the home server's NPM
+                 (TCP 443); member devices (PC, phone, home server) may reach it
+ Home NPM  ─► ⑤ requests from the VM get 403 unless the app is on the published list
 ```
+
+Port 853 in the security list is unused while the VM's AdGuard is off.
 
 - **Cost guards (Oracle account):** quota policy `free-tier-only` caps everything at Always Free amounts (A1 2 OCPU / 12 GB, block storage 200 GB in the VM's AD and 0 in the others, no reserved public IPs, no paid services) and a budget `zero-cost-guard` (EUR 1, alerts at 1 % actual and forecast). Oracle halved the free A1 allowance on 2026-06-15 to 2 OCPU / 12 GB; the console's banner still shows the old 4 / 24.
 - **Least privilege:** the CLI runs as an API-key-only user `cli-bot` (group `homelab-ops`) that may manage only the `homelab` compartment and read costs. The admin account uses MFA and is kept out of day-to-day work.
 - **SSH:** key only, user `ubuntu`, no root, no X11, reachable over Tailscale only. One key per device.
 
-## AdGuard Home (DNS-over-TLS)
+## AdGuard Home (stopped)
+
+**Switched off on 2026-10-27; the files stay for later.** The home AdGuard is the only DNS: the phone's DoT name is a CNAME to the home apex, the VM's container is down (`docker compose down`), the home `adguardhome-sync` sits behind the compose profile `oracle-replica`, and the 02:30 cert reload below is commented out. The home server's old failover script (`scripts/dns-failover.py`) is replaced by a gateway heartbeat. To bring it back: `docker compose up -d` here, `docker compose --profile oracle-replica up -d` in the home AdGuard stack, re-enable the cron line, and point the phone's name at the VM again. The notes below describe it as it ran.
 
 [`docker/adguardhome`](docker/adguardhome/) is a copy of the home server's AdGuard, so the phone can use either one with the same Private DNS name. The config was copied from home with three changes: web UI on port 80 inside the container, HTTPS UI off and DNS-over-QUIC off (Oracle only lets TCP 853 in).
 
@@ -33,7 +38,7 @@ A second, public-facing server next to the home server: an Oracle Cloud **Always
 
 Both block at the firewall, before a request reaches Traefik. Neither touches SSH (Tailscale only), and GeoIP leaves DoT `853` and Tailscale open worldwide.
 
-- **CrowdSec** ([`docker/crowdsec`](docker/crowdsec/)) reads Traefik's access log, which has every public request with the real client IP ([`acquis.yaml`](docker/crowdsec/acquis.yaml), collection `crowdsecurity/traefik`; [`host/logrotate-pangolin-traefik`](host/logrotate-pangolin-traefik) keeps 7 days). Pangolin has no CrowdSec of its own, so this stays. It detects scans, brute force and known CVE probes, and adds the community blocklist. The host package `crowdsec-firewall-bouncer-iptables` (CrowdSec's apt repository) enforces bans as the first rule in `INPUT` and `DOCKER-USER`. An allowlist `homelab` holds the home public IP and `100.64.0.0/10`, so we can't ban ourselves.
+- **CrowdSec** ([`docker/crowdsec`](docker/crowdsec/)) reads Traefik's access log, which has every public request with the real client IP ([`acquis.yaml`](docker/crowdsec/acquis.yaml), collection `crowdsecurity/traefik`; [`host/logrotate-pangolin-traefik`](host/logrotate-pangolin-traefik) keeps 7 days). Pangolin has no CrowdSec of its own, so this stays. Its dashboard is [CrowdSec Web UI](https://github.com/TheDuffman85/crowdsec-web-ui) in the same compose: alerts, bans and metrics, its own login, no Docker socket. It logs in to CrowdSec as the machine `crowdsec-web-ui` and is Tailscale-only: `oracle-crowdsec` (Pangolin rules: Tailscale → bypass, everything else blocked) or `<TAILSCALE-IP>:3002`. It detects scans, brute force and known CVE probes, and adds the community blocklist. The host package `crowdsec-firewall-bouncer-iptables` (CrowdSec's apt repository) enforces bans as the first rule in `INPUT` and `DOCKER-USER`. An allowlist `homelab` holds the home public IP and `100.64.0.0/10`, so we can't ban ourselves.
 - **GeoIP** ([`host/geoip-allow.sh`](host/geoip-allow.sh) with its systemd units) is an `ipset` of German and Kuwaiti networks from ipdeny.com. In `DOCKER-USER`, ports 80/443 on the public interface accept only those. Certificates use DNS-01, so Let's Encrypt never needs port 80. The script refuses to apply a short or empty list, so a failed download can't block everyone. `geoip-allow.sh off` removes the rule.
 
 ## Gateway: Pangolin + Pocket ID
@@ -42,26 +47,48 @@ Both block at the firewall, before a request reaches Traefik. Neither touches SS
 
 - **[`docker/pangolin`](docker/pangolin/)**: `pangolin` (dashboard, API, rules) and `traefik` (ports 80/443; 80 only redirects to HTTPS). Traefik joins `proxy-net` and reaches apps by container name.
 - **No tunnels.** Pangolin's own tunnel parts (Gerbil, Newt) are not installed. Home is reached over Tailscale, and Pangolin's VPN uses the same `100.64.0.0/10` range as Tailscale, which clashes on Linux. The `gerbil:` block in `config.yml` only satisfies Pangolin's config check.
-- **Certificate.** Traefik gets `*.yourdomain.dedyn.io` from Let's Encrypt by DNS-01 through deSEC (token in `.env`) and renews it about 30 days before expiry. `LEGO_DISABLE_CNAME_SUPPORT=true` is required: the domain's wildcard CNAME would otherwise send the `_acme-challenge` record to the apex. The Badger plugin is pinned to `v1.7.0`, because `v1.8.0` failed Traefik's plugin integrity check.
-- **[`docker/pocket-id`](docker/pocket-id/)**: no published port. Traefik routes it from [`dynamic_config.yml`](docker/pangolin/config/traefik/dynamic_config.yml), not as a Pangolin resource, so the login never depends on the gate it feeds. Back up its `ENCRYPTION_KEY`: without it Pocket ID can't read its data. Public DNS sends the name home, so Traefik carries a Docker network alias with Pocket ID's name, and Pangolin reaches Pocket ID directly when it checks a login.
+- **Certificate.** Traefik gets `*.yourdomain.dedyn.io` from Let's Encrypt by DNS-01 through deSEC (token in `.env`) and renews it about 30 days before expiry. The deSEC token `oracle-traefik-acme` may only write the TXT records `_acme-challenge` and `_acme-challenge.oracle-pangolin` (the dashboard has its own cert), may not create or delete domains, and only works from the VM's public IP; everything else is read-only (tested: other records `403`, other IPs `401`). `LEGO_DISABLE_CNAME_SUPPORT=true` stays set: it was needed while the wildcard was a CNAME, which would have sent the `_acme-challenge` record to the apex. The Badger plugin is pinned to `v1.7.0`, because `v1.8.0` failed Traefik's plugin integrity check.
+- **[`docker/pocket-id`](docker/pocket-id/)**: no published port. Traefik routes it from [`dynamic_config.yml`](docker/pangolin/config/traefik/dynamic_config.yml), not as a Pangolin resource, so the login never depends on the gate it feeds. Back up its `ENCRYPTION_KEY`: without it Pocket ID can't read its data. Traefik carries a Docker network alias with Pocket ID's name, so Pangolin reaches Pocket ID directly inside Docker when it checks a login, whatever public DNS says.
 - **Pocket ID → Pangolin.** OIDC client "Pangolin" (callback `https://oracle-pangolin.yourdomain.dedyn.io/auth/idp/*/oidc/callback`, access *All Users*; the default "selected groups" with no group denies everyone). In Pangolin, identity provider "Pocket ID" with identifier `preferred_username` and auto-provisioning: your own username becomes Admin, everyone else Member (`preferred_username == '<you>' && 'Admin' || 'Member'`). A Member sees only the apps given to the Member role.
 
-### Admin links (Tailscale + Pocket ID)
+### Admin links: Tailscale = app login, internet = Pocket ID first
 
-`oracle-pangolin`, `oracle-pocketid`, `oracle-adguard` and `oracle-uptimekuma` under `yourdomain.dedyn.io` all use the wildcard certificate. AdGuard rewrites (set at home, synced) point them at the VM's Tailscale IP.
+`oracle-pangolin`, `oracle-pocketid`, `oracle-navidrome`, `oracle-uptimekuma` and `oracle-crowdsec` under `yourdomain.dedyn.io` all use the wildcard certificate. Public DNS sends them to the VM through the wildcard record; the home AdGuard points them at the VM's Tailscale IP.
 
-- **Pangolin and Pocket ID:** a Traefik `ipAllowList` admits only `100.64.0.0/10` (plus Docker networks for Pocket ID, for Pangolin's own calls). Internet: `403`.
-- **AdGuard and Kuma** are Pangolin resources (targets `adguardHome:80` and `uptime-kuma:3001`, site type *Local*). Rule 1: from `100.64.0.0/10` → Pocket ID login (*skip to identity provider*, straight to the passkey). Rule 2: block everything else. Internet: `401`. After Pocket ID comes the app's own login, because neither app supports OIDC.
-- **Fallback:** the direct Tailscale ports (`<TAILSCALE-IP>:8880` AdGuard, `:3001` Kuma) skip Pangolin. Use them if Pangolin or Pocket ID is down. The phone's DNS, the home heartbeat and the AdGuard sync use them too.
+- **On Tailscale:** Tailscale already proves who you are, so the apps open straight to their own login. Each is a Pangolin resource (site type *Local*, targets by container name) with the rule: from `100.64.0.0/10` → bypass the gateway login.
+- **Tailscale-only:** Kuma and CrowdSec Web UI add a second rule, `DROP /*`, so from the internet they answer `401` with no login page at all.
+- **From the internet:** first the host firewall (GeoIP DE/KW, CrowdSec), then the Pocket ID passkey (*skip to identity provider*: no Pangolin login page in between), then the app's own login. Pangolin's dashboard and Pocket ID are public so this login can happen. Pangolin's email + password login (the server admin account) answers only over Tailscale (`/api/v1/auth/login` behind an `ipAllowList`, internet: `403`). Sign-ups are closed in both apps.
+- **Navidrome apps:** `/rest/*` (the Subsonic API, with Navidrome's own login) passes without Pocket ID, so music apps work; Traefik limits it to 10 requests per second per IP (burst 50, then `429`).
+- **Login lifetime:** a Pangolin session lasts 30 days and extends while used; Pocket ID's own sign-in lasts about an hour (default).
+- **Fallback:** the direct Tailscale ports (`<TAILSCALE-IP>:3001` Kuma, `:3002` CrowdSec Web UI, `:9898` Backrest) skip Pangolin. Use them if Pangolin or Pocket ID is down. The home heartbeat and the backup push use them too.
+
+### Home apps through the gateway
+
+Home apps are published here one by one; everything not published stays reachable only at home or over Tailscale. Started 2026-10-28 with BentoPDF as the test app.
+
+```
+ phone / friend (no Tailscale) ─► public DNS: *.yourdomain.dedyn.io → VM
+   ─► GeoIP + CrowdSec ─► Traefik ─► Pocket ID ─► Pangolin resource
+   ─► Tailscale (ACL: TCP 443 to the home server only) ─► home NPM ─► app
+```
+
+- **DNS (deSEC).** `*` is an A record to the VM's public IP. The apex keeps the home IP (DDNS), and the phone's DoT name is a CNAME to the apex, so DNS-over-TLS still goes home. No per-app records.
+- **Pangolin resource.** Same name as at home (e.g. `bentopdf`), target `https://<HOME-TAILSCALE-IP>:443`, *TLS server name* and *Host header* set to the app's name so home NPM picks the right host and Traefik can verify NPM's certificate. Rule: from `100.64.0.0/10` → bypass; skip to identity provider Pocket ID. Who may open it is set per resource (roles or users).
+- **Home NPM.** [`http_top.conf`](../docker/nginx-proxy-manager/data/nginx/custom/http_top.conf) maps requests from the VM's Tailscale IP to `403` unless the host is listed, and [`server_proxy.conf`](../docker/nginx-proxy-manager/data/nginx/custom/server_proxy.conf) (included by every proxy host) enforces it. A broken-into VM can reach port 443 but none of the unpublished apps.
+- **Home AdGuard.** At home and on Tailscale the name keeps pointing at the home server. A published app gets a self-rewrite (it leaves the `*.yourdomain` wildcard rewrite), then `||app^$dnsrewrite=<HOME-LAN-IP>` for everyone plus `@@||app^$dnsrewrite,client='<PHONE-CLIENT-NAME>'`, so the phone (which always asks over DoT) gets public DNS and reaches the app through the gateway with Tailscale off. `$client` matches the persistent client's **name**; a ClientID there never matches (tested).
+- **The home server itself** resolves through the router, which now answers with the VM. `/etc/hosts` pins `uptimekuma.yourdomain.dedyn.io` to `127.0.0.1` / `::1`, so its cron pushes still reach the home Kuma.
+
+To publish another app: Pangolin resource (as above), a line in `http_top.conf` plus `nginx -s reload` in the NPM container, the AdGuard self-rewrite and the two rules. To unpublish, undo the three.
 
 ## Uptime Kuma (watching home)
 
-[`docker/uptime-kuma`](docker/uptime-kuma/) watches the home server from outside, so an alert still goes out when the home internet is down. It started as a copy of the home Kuma database, giving the same login and Discord alert, with the home monitors and history removed. It has two monitors:
+[`docker/uptime-kuma`](docker/uptime-kuma/) watches the home server from outside, so an alert still goes out when the home internet is down. It started as a copy of the home Kuma database, giving the same login and Discord alert, with the home monitors and history removed. It has three monitors:
 
 - **Home internet (DoT 853)**: TCP check of the home public DoT port every 60 s (home internet, router forward, home AdGuard).
 - **Home server heartbeat**: a push the home server sends every minute from its crontab, with the token in the cron line. Silence means the server is off or offline.
+- **Oracle Backup → GDrive**: the push at the end of the 04:00 upload (see the schedule).
 
-The UI is on `<TAILSCALE-IP>:3001`, over Tailscale only.
+The UI is on `<TAILSCALE-IP>:3001` or `oracle-uptimekuma`, over Tailscale only. In the other direction, the home server opens Pangolin's dashboard every minute and pushes to the home Kuma ("Oracle gateway (Pangolin)").
 
 ## Dockhand (Hawser agent)
 
@@ -76,7 +103,7 @@ The home Dockhand manages this VM through [Hawser](docker/hawser/) in standard m
 
 ## Scheduled jobs (Oracle VM)
 
-All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, cert reload 02:30, backup 03:15, upload 04:00. OS updates install only after the backup and upload, and a reboot comes last. Unlike the home server, OS updates install themselves, because nobody logs in here every week. Rows marked *planned* are added as services move in.
+All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, database copies 03:00, backup 03:15, upload 04:00. OS updates install only after the backup and upload, and a reboot comes last. Unlike the home server, OS updates install themselves, because nobody logs in here every week. Rows marked *planned* are added as services move in.
 
 | When | Job | Runs from |
 |---|---|---|
@@ -84,14 +111,13 @@ All times Europe/Berlin, read from the VM's timers and crontab. The slots match 
 | 01:00 | Dockhand update check, as on the home server | Dockhand, through its agent |
 | Mon 01:00 | Docker cleanup: images and build cache unused for 7 days (same slot as Dockhand's prune at home) | user crontab |
 | 02:00 | apt: download package lists | systemd `apt-daily.timer` |
-| Hourly | AdGuard `cert-sync`: exports the wildcard cert from Traefik | `adguardhome` stack |
-| 02:30 | AdGuard cert reload: restarts AdGuard if the served cert differs (`adguardhome/cert-reload.sh`), as on the home server | user crontab |
-| 03:15 | *planned:* backup, as on the home server | – |
-| 04:00 | *planned:* upload of that backup to Google Drive, as on the home server | – |
+| 03:00 | Database copies: consistent `.snapshot` copies of the 6 SQLite databases (Pocket ID, Pangolin, Kuma, Navidrome, CrowdSec, CrowdSec Web UI) through SQLite's online backup, no container stop ([`host/oracle-db-snapshots.py`](host/oracle-db-snapshots.py)) | root crontab |
+| 03:15 | Backrest: backup of `/opt/docker` (music and caches excluded); keeps 7 daily, 4 weekly, 6 monthly; prune and check on the 1st at 00:00 ([`docker/backrest`](docker/backrest/)) | Backrest |
+| 04:00 | Upload of the Backrest repo to Google Drive (`System & Backups/Local Server Backup/oracle-backup (Backrest)`), only if tonight's database copies and backup exist; then a push to Oracle's Kuma monitor "Oracle Backup → GDrive" | root crontab |
 | 04:15 | Unattended upgrades: Ubuntu security and regular updates; old kernels and unused packages removed | systemd `apt-daily-upgrade.timer` |
 | 04:45 | Reboot, only if an update requires it | unattended-upgrades |
 | Mon 01:10 | GeoIP: refresh the DE and KW country lists and re-apply the 80/443 rule | systemd `geoip-allow-update.timer` |
-| Every 60 s | Uptime Kuma checks the home internet (public DoT port); the home server pushes a heartbeat every minute | Uptime Kuma, home crontab |
+| Every 60 s | Uptime Kuma checks the home internet (public DoT port); the home server pushes a heartbeat every minute, and checks Oracle's gateway for home Kuma | Uptime Kuma, home crontab |
 | Weekly (Mon, random time) | SSD trim | systemd `fstrim.timer` |
 | Daily | Traefik checks its certificates and renews them about 30 days before expiry | Traefik (Pangolin) |
 | Continuous | Tailscale updates itself | Tailscale |
@@ -165,8 +191,11 @@ Crontab of `ubuntu`
 # Weekly Docker cleanup (docker-cleanup), Monday 01:00 like Dockhand prune at home: images and build cache unused for 7 days
 0 1 * * 1 docker image prune -af --filter until=168h >/dev/null && docker builder prune -af --filter until=168h >/dev/null
 # AdGuard cert reload, 02:30 like at home: restarts AdGuard if Traefik (Pangolin) renewed the certificate
-30 2 * * * /opt/docker/adguardhome/cert-reload.sh >> /opt/docker/adguardhome/cert-reload.log 2>&1
+# PAUSED 2026-10-27: AdGuard on the VM is switched off
+#30 2 * * * /opt/docker/adguardhome/cert-reload.sh >> /opt/docker/adguardhome/cert-reload.log 2>&1
 ```
+
+`oracle-keepalive.service` ([script](host/oracle-keepalive.py), [unit](host/oracle-keepalive.service)): temporary guard against Oracle's idle reclaim, which stops an Always Free VM when CPU, network and memory all stay under 20% for 7 days. It holds 2 GB of RAM (about 30% in use) and runs a light CPU burst for 12 minutes each hour at the lowest priority. Remove it once real services keep the VM busy: `systemctl disable --now oracle-keepalive`.
 
 `/etc/logrotate.d/pangolin-traefik`: see [`host/logrotate-pangolin-traefik`](host/logrotate-pangolin-traefik) (daily, 7 kept, `copytruncate` because Traefik keeps the file open).
 

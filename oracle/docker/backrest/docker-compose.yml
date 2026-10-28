@@ -1,0 +1,32 @@
+# Copy of the home Backrest (2026-10-27). Differences: UI on the Tailscale IP (no NPM here), Oracle paths.
+services:
+  backrest:
+    image: garethgeorge/backrest:latest
+    container_name: backrest
+    hostname: backrest-oracle
+    restart: unless-stopped
+
+    ports:
+      - "<TAILSCALE-IP>:9898:9898"   # web UI: Tailscale only, never public
+
+    environment:
+      - BACKREST_DATA=/data # path for backrest data. restic binary and the database are placed here.
+      - BACKREST_CONFIG=/config/config.json # path for the backrest config file.
+      - XDG_CACHE_HOME=/cache # path for the restic cache which greatly improves performance.
+      - TZ=Europe/Berlin # set the timezone for the container, used as the timezone for cron jobs.
+
+    volumes:
+      - ./data:/data
+      - ./config:/config
+      - ./cache:/cache
+      - /opt/docker:/opt/docker:ro # back up all stacks (read-only for security)
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:9898/"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    security_opt:
+      - no-new-privileges:true

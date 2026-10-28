@@ -31,7 +31,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 | App | Folder | What it is | Reached via |
 |---|---|---|---|
 | [Nginx Proxy Manager](https://nginxproxymanager.com) | `nginx-proxy-manager` | Reverse proxy and SSL, plus [error-pages](https://github.com/tarampampam/error-pages) | host `80`, `443`, `81` |
-| [AdGuard Home](https://adguard.com/adguard-home.html) | `adguardhome` | Network-wide DNS ad-blocking; DoT and HTTPS use NPM's cert. Includes [adguardhome-sync](https://github.com/bakito/adguardhome-sync), which copies the settings hourly to the Oracle VM's AdGuard (home is the origin; TLS and DHCP not synced) | host network: DNS `53`, DoT `853`, UI `8880` / `8443` |
+| [AdGuard Home](https://adguard.com/adguard-home.html) | `adguardhome` | Network-wide DNS ad-blocking; DoT and HTTPS use NPM's cert. Includes [adguardhome-sync](https://github.com/bakito/adguardhome-sync) for the Oracle VM's AdGuard, paused behind the compose profile `oracle-replica` while that AdGuard is off | host network: DNS `53`, DoT `853`, UI `8880` / `8443` |
 | [Dockhand](https://hub.docker.com/r/fnsys/dockhand) | `dockhand` | Web UI for managing the compose stacks | `dockhand:3000` |
 | [Uptime Kuma](https://github.com/louislam/uptime-kuma) | `uptime-kuma` | Uptime monitoring | `uptime-kuma:3001` |
 | [Backrest](https://github.com/garethgeorge/backrest) | `backrest` | Restic backup UI, backs up `/opt/docker` read-only | `backrest:9898` |
@@ -52,7 +52,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 
 ## Oracle Cloud VM
 
-A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet, starting with Pangolin (Traefik with Pocket ID passkey login) as the public gateway and AdGuard DNS-over-TLS for the phone, while the data stays at home. SSH and every admin UI are reachable over Tailscale only, and a Tailscale ACL stops the VM from reaching anything at home. Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
+A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet: Pangolin (Traefik with Pocket ID passkey login) as the public gateway, which also publishes chosen home apps, while the data stays at home. Public DNS sends `*.yourdomain.dedyn.io` to the VM; the home AdGuard keeps sending home devices straight to the home server. SSH and every admin UI are reachable over Tailscale only. A Tailscale ACL lets the VM reach only NPM's port 443 at home, and NPM answers the VM with `403` for every app not on its published list ([`http_top.conf`](docker/nginx-proxy-manager/data/nginx/custom/http_top.conf)). Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
 
 ## Scheduled jobs (home server)
 
@@ -61,9 +61,8 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | When | Job | Runs from |
 |---|---|---|
 | Every 30 min (:13, :43) | deSEC DynDNS update of the home IP, with an Uptime Kuma heartbeat | root crontab |
-| Every minute | Phone DNS failover: DNS-over-TLS check of the Oracle VM as the phone uses it, reported to Uptime Kuma; after 3 failures the phone's DoT name points home, after 10 good checks back to the VM (`scripts/dns-failover.py`) | user crontab |
+| Every minute | Oracle gateway check: opens Pangolin's dashboard on the VM and pushes to the home Kuma monitor "Oracle gateway (Pangolin)" (replaced the phone DNS failover, `scripts/dns-failover.py`, kept on disk) | user crontab |
 | Every minute | Heartbeat to the Uptime Kuma on the Oracle VM (silence there = home down) | user crontab |
-| Hourly (:00) | AdGuard settings → Oracle VM's AdGuard (filters, rules, rewrites, clients, DNS settings; not TLS) | adguardhome-sync (in the `adguardhome` stack) |
 | 00:00 Mon–Fri (23:00 Sun–Thu) | Sure: stock price import | Sure (UTC) |
 | 00:00 on the 1st | Backrest prune and check | Backrest |
 | 01:00 | Dockhand: check all containers for updates (no auto-install) and cleanups; Mondays also prune unused images | Dockhand |

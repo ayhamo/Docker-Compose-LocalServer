@@ -24,3 +24,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  crowdsec-web-ui:
+    # Dashboard for CrowdSec: alerts, bans (decisions), metrics. Own login; logs in to CrowdSec as machine "crowdsec-web-ui".
+    image: ghcr.io/theduffman85/crowdsec-web-ui:latest
+    container_name: crowdsec-web-ui
+    restart: unless-stopped
+    env_file: .env                    # CONFIG_INSTANCE_LAPI_AUTH_PASSWORD (600)
+    environment:
+      CONFIG_INSTANCE_LAPI_URL: http://crowdsec:8080
+      CONFIG_INSTANCE_LAPI_AUTH_USERNAME: crowdsec-web-ui
+      TZ: Europe/Berlin
+    ports:
+      - "<TAILSCALE-IP>:3002:3000"     # web UI: Tailscale only (fallback; normal link goes through Pangolin)
+    volumes:
+      - ./web-ui-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+      - proxy-net                     # Traefik (Pangolin) reaches it as crowdsec-web-ui:3000
+    depends_on:
+      - crowdsec
+
+networks:
+  proxy-net:
+    external: true

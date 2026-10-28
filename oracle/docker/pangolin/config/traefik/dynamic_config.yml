@@ -7,43 +7,64 @@ http:
     tailscale-only:
       ipAllowList:
         sourceRange: ["100.64.0.0/10"]
-    tailscale-or-docker:
-      ipAllowList:
-        sourceRange: ["100.64.0.0/10", "172.16.0.0/12"]   # + Pangolin server-to-server calls (Docker networks)
+    navidrome-rest-ratelimit:
+      rateLimit:          # per client IP; Subsonic apps stay well below this, password guessing does not
+        average: 10
+        period: 1s
+        burst: 50
 
   routers:
-    # Pangolin dashboard: Tailscale only for now (make it public when friends need to log in)
+    # Pangolin dashboard + login page: public (GeoIP DE/KW + CrowdSec filter at the host firewall)
     next-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && !PathPrefix(`/api/v1`)"
       service: next-service
       entryPoints: [websecure]
-      middlewares: [tailscale-only, badger]
+      middlewares: [badger]
       tls:
         certResolver: letsencrypt
         domains:
           - main: "yourdomain.dedyn.io"
             sans: ["*.yourdomain.dedyn.io"]
+    # Email + password login (the server admin account) only over Tailscale.
+    # Pocket ID logins use /api/v1/auth/idp/... and stay reachable from the internet.
+    password-login-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && PathPrefix(`/api/v1/auth/login`)"
+      priority: 1000
+      service: api-service
+      entryPoints: [websecure]
+      middlewares: [tailscale-only, badger]
+      tls:
+        certResolver: letsencrypt
     api-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && PathPrefix(`/api/v1`)"
       service: api-service
       entryPoints: [websecure]
-      middlewares: [tailscale-only, badger]
+      middlewares: [badger]
       tls:
         certResolver: letsencrypt
     ws-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`)"
       service: api-service
       entryPoints: [websecure]
-      middlewares: [tailscale-only, badger]
+      middlewares: [badger]
       tls:
         certResolver: letsencrypt
 
-    # Pocket ID: routed here, not as a Pangolin resource, so the login provider never depends on the gate it feeds
+    # Pocket ID (public, passkey login): routed here, not as a Pangolin resource, so the login provider never depends on the gate it feeds
     pocket-id:
       rule: "Host(`oracle-pocketid.yourdomain.dedyn.io`)"
       service: pocket-id
       entryPoints: [websecure]
-      middlewares: [tailscale-or-docker]
+      tls:
+        certResolver: letsencrypt
+
+    # Navidrome Subsonic API (/rest): already open past Pocket ID by a Pangolin rule; this router only adds the rate limit
+    navidrome-rest:
+      rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest`)"
+      priority: 1000
+      service: navidrome
+      entryPoints: [websecure]
+      middlewares: [navidrome-rest-ratelimit]
       tls:
         certResolver: letsencrypt
 
@@ -57,3 +78,6 @@ http:
     pocket-id:
       loadBalancer:
         servers: [{url: "http://pocket-id:1411"}]
+    navidrome:
+      loadBalancer:
+        servers: [{url: "http://navidrome:4533"}]

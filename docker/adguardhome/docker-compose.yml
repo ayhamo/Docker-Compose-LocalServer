@@ -84,6 +84,9 @@ services:
       start_period: 30s
 
   adguardhome-sync:
+    # PAUSED 2026-10-27: the Oracle VM AdGuard is switched off (kept on disk for later).
+    # Only starts with:  docker compose --profile oracle-replica up -d
+    profiles: ["oracle-replica"]
     # Copies these AdGuard settings (filters, rules, rewrites, clients, DNS settings)
     # to the AdGuard on the Oracle VM every hour. Home is always the origin; never edit the VM copy.
     image: ghcr.io/bakito/adguardhome-sync:latest
