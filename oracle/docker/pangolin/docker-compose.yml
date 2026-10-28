@@ -47,6 +47,23 @@ services:
           - oracle-pocketid.yourdomain.dedyn.io
       proxy-net: {}                 # reaches the apps by container name
 
+  error-pages:
+    # Styled error pages (same as home NPM): Traefik shows them for blocked dashboard pages and unknown names
+    image: ghcr.io/tarampampam/error-pages:4
+    container_name: error-pages
+    restart: unless-stopped
+    environment:
+      ROTATION_MODE: random-on-each-request
+      SHOW_DETAILS: "false"          # no request details for strangers
+      SEND_SAME_HTTP_CODE: "true"    # a 404 page is sent with status 404
+    # Hardening: no privilege escalation, no Linux capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - default
+
 networks:
   default:
     name: pangolin
