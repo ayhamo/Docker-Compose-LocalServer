@@ -35,6 +35,7 @@ services:
     environment:
       CONFIG_INSTANCE_LAPI_URL: http://crowdsec:8080
       CONFIG_INSTANCE_LAPI_AUTH_USERNAME: crowdsec-web-ui
+      CONFIG_INSTANCE_METRICS_URL: http://crowdsec:6060/metrics   # CrowdSec Prometheus metrics (level full), for the Metrics page
       TZ: Europe/Berlin
     ports:
       - "<TAILSCALE-IP>:3002:3000"     # web UI: Tailscale only (fallback; normal link goes through Pangolin)
