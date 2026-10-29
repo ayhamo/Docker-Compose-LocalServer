@@ -1,4 +1,4 @@
-# Copy of the home Backrest (2026-10-27). Differences: UI on the Tailscale IP (no NPM here), Oracle paths.
+# Copy of the home Backrest (2026-10-27). Differences: UI through Pangolin (Tailscale only), Oracle paths.
 services:
   backrest:
     image: garethgeorge/backrest:latest
@@ -6,8 +6,6 @@ services:
     hostname: backrest-oracle
     restart: unless-stopped
 
-    ports:
-      - "<TAILSCALE-IP>:9898:9898"   # web UI: Tailscale only, never public
 
     environment:
       - BACKREST_DATA=/data # path for backrest data. restic binary and the database are placed here.
@@ -30,3 +28,10 @@ services:
 
     security_opt:
       - no-new-privileges:true
+    networks:
+      - default
+      - proxy-net                     # Traefik (Pangolin) reaches it as backrest:9898
+
+networks:
+  proxy-net:
+    external: true

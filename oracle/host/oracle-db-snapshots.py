@@ -13,7 +13,7 @@ DBS = [
     "/opt/docker/uptime-kuma/data/kuma.db",
     "/opt/docker/navidrome/navidrome-data/navidrome.db",
     "/opt/docker/crowdsec/data/crowdsec.db",
-    "/opt/docker/crowdsec/web-ui-data/crowdsec.db",
+    "/opt/docker/crowdsec/web-ui-data/state.db",
 ]
 
 failed = 0

@@ -37,15 +37,13 @@ services:
       CONFIG_INSTANCE_LAPI_AUTH_USERNAME: crowdsec-web-ui
       CONFIG_INSTANCE_METRICS_URL: http://crowdsec:6060/metrics   # CrowdSec Prometheus metrics (level full), for the Metrics page
       TZ: Europe/Berlin
-    ports:
-      - "<TAILSCALE-IP>:3002:3000"     # web UI: Tailscale only (fallback; normal link goes through Pangolin)
     volumes:
       - ./web-ui-data:/app/data
     security_opt:
       - no-new-privileges:true
     networks:
       - default
-      - proxy-net                     # Traefik (Pangolin) reaches it as crowdsec-web-ui:3000
+      - proxy-net                     # Traefik (Pangolin) reaches it as crowdsec-web-ui:3000 (no published port: Pangolin only)
     depends_on:
       - crowdsec
 

@@ -91,7 +91,7 @@ http:
         certResolver: letsencrypt
     # Tailscale-only apps: from the internet a styled 403 instead of Pangolin's plain "Unauthorized"
     tailscale-only-apps-public:
-      rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`)"
+      rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`) || Host(`oracle-backrest.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`)"
       priority: 10000
       service: error-pages
       entryPoints: [websecure]
