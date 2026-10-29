@@ -79,11 +79,13 @@ Published (2026-10-29), all **Admin role only** except BentoPDF (also Member). T
 | App | Paths without Pocket ID |
 |---|---|
 | BentoPDF, Floppy, Sure, SnapOtter | none (SnapOtter has no login of its own, so Pocket ID is its only lock) |
-| SparkyFitness | `/api/*` (its installed web app on the phone serves its pages from cache, so only its API calls reach the gateway; also its mobile app) |
-| Navidrome (home) | `/rest/*`, rate-limited like the VM's (router `home-navidrome-rest` in `dynamic_config.yml`, straight to home NPM with NPM's certificate checked); failed logins ban permanently (see *Ban length*) |
-| Immich | `/api/*`, `/.well-known/immich` |
-| Nextcloud | `/remote.php/*`, `/ocs/*`, `/status.php`, `/index.php/login/v2/poll`, `/login/v2/poll`, `/.well-known/*`. Known limit through the gateway (not at home or on Tailscale): the Nextcloud app's thumbnails, avatar and office editing (`/index.php/core/preview`, `/index.php/avatar`, `/apps/files/directEditing/…` in its built-in browser) stop at Pocket ID; files, sync and the web UI work. Kept this way on purpose |
+| SparkyFitness *(disabled)* | `/api/*` (its installed web app on the phone serves its pages from cache, so only its API calls reach the gateway; also its mobile app) |
+| Navidrome (home) *(disabled)* | `/rest/*`, rate-limited like the VM's (router `home-navidrome-rest` in `dynamic_config.yml`, straight to home NPM with NPM's certificate checked); failed logins ban permanently (see *Ban length*) |
+| Immich *(disabled)* | `/api/*`, `/.well-known/immich` |
+| Nextcloud *(disabled)* | `/remote.php/*`, `/ocs/*`, `/status.php`, `/index.php/login/v2/poll`, `/login/v2/poll`, `/.well-known/*`. Known limit through the gateway (not at home or on Tailscale): the Nextcloud app's thumbnails, avatar and office editing (`/index.php/core/preview`, `/index.php/avatar`, `/apps/files/directEditing/…` in its built-in browser) stop at Pocket ID; files, sync and the web UI work. Kept this way on purpose |
 | Immich Drop | resource exists but is **disabled** (its NPM line is commented out) |
+
+**Disabled since 2026-10-29:** SparkyFitness, home Navidrome, Immich and Nextcloud, the four apps whose paths above pass without Pocket ID, until their passwords are made strong. Away from home they open only over Tailscale. Their Pangolin resources are disabled (`enabled = 0`), the `home-navidrome-rest` router is commented out, and their lines in home NPM's `http_top.conf` are commented out (the VM gets `403`). The gateway answers `404` for them. Their bypass rules, the home AdGuard rules and the ban scenarios stay in place, so re-enabling them means undoing those three steps.
 
 - **Never published:** Dockhand (Docker socket), NPM admin, Backrest, Kuma, AdGuard, GPTWOL, Dynacat, lastGLANCE, Pinchflat, the Nextcloud AIO admin. The Oracle Kuma monitor "Home NPM blocks the VM" checks Dockhand for that reason.
 - **Real client IPs in Nextcloud:** `trusted_proxies` also lists the VM's Tailscale IP, so its brute-force protection counts each visitor, not the VM (Traefik overwrites any `X-Forwarded-For` a client sends). AIO may reset `config.php` on updates: check `occ config:system:get trusted_proxies` after one.

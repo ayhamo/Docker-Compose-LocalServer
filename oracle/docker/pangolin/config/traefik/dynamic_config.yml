@@ -102,14 +102,15 @@ http:
         certResolver: letsencrypt
     # Home Navidrome's Subsonic API: open past Pocket ID by its Pangolin rule (/rest/*); this router only adds the
     # same rate limit, straight to home NPM over Tailscale like the Pangolin resource
-    home-navidrome-rest:
-      rule: "Host(`navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest`)"
-      priority: 1000
-      service: home-navidrome
-      entryPoints: [websecure]
-      middlewares: [navidrome-rest-ratelimit]
-      tls:
-        certResolver: letsencrypt
+    # DISABLED 2026-10-29 until the home app passwords are changed (Tailscale only meanwhile)
+    # home-navidrome-rest:
+    #   rule: "Host(`navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest`)"
+    #   priority: 1000
+    #   service: home-navidrome
+    #   entryPoints: [websecure]
+    #   middlewares: [navidrome-rest-ratelimit]
+    #   tls:
+    #     certResolver: letsencrypt
     # Per-song background clips for the Psysonic / BitChord forks: /rest/x-clip/<folder>/<file> -> navidrome-clips
     navidrome-clips:
       rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest/x-clip/`)"
