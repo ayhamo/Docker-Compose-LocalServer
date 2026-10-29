@@ -1,11 +1,11 @@
 # Oracle Cloud VM (Always Free)
 
-A second, public-facing server next to the home server: an Oracle Cloud **Always Free** ARM VM (2 OCPU, 12 GB RAM, 50 GB disk, Ubuntu 24.04 aarch64). It hosts what has to stay up or face the internet (the public Pangolin gateway with Pocket ID login, which also publishes chosen home apps; Uptime Kuma watching home) while the home server keeps the data. Compose files live under [`docker/`](docker/), which mirrors `/opt/docker/` on the VM.
+A second, public-facing server next to the home server: an Oracle Cloud **Always Free** ARM VM (2 OCPU, 12 GB RAM, 100 GB disk, Ubuntu 24.04 aarch64). It hosts what has to stay up or face the internet (the public Pangolin gateway with Pocket ID login, which also publishes chosen home apps; Uptime Kuma watching home) while the home server keeps the data. Compose files live under [`docker/`](docker/), which mirrors `/opt/docker/` on the VM.
 
 ## Security layout
 
 ```
- Internet ─► ① Oracle security list: TCP 80, 443, 853 + UDP 41641 (Tailscale) only. No SSH.
+ Internet ─► ① Oracle security list: TCP 80, 443 + UDP 41641 (Tailscale) only. No SSH.
           ─► ② VM firewall (iptables): SSH only on tailscale0; CrowdSec bans first,
                then 80/443 only from DE and KW (GeoIP)
           ─► ③ Docker: Traefik (Pangolin) 80/443 public; admin UIs on the Tailscale IP,
@@ -15,7 +15,7 @@ A second, public-facing server next to the home server: an Oracle Cloud **Always
  Home NPM  ─► ⑤ requests from the VM get 403 unless the app is on the published list
 ```
 
-Port 853 in the security list is unused while the VM's AdGuard is off.
+Port 853 (DoT) was removed from the security list on 2026-10-29 while the VM's AdGuard is off; add it back when AdGuard returns.
 
 - **Cost guards (Oracle account):** quota policy `free-tier-only` caps everything at Always Free amounts (A1 2 OCPU / 12 GB, block storage 200 GB in the VM's AD and 0 in the others, no reserved public IPs, no paid services) and a budget `zero-cost-guard` (EUR 1, alerts at 1 % actual and forecast). Oracle halved the free A1 allowance on 2026-06-15 to 2 OCPU / 12 GB; the console's banner still shows the old 4 / 24.
 - **Least privilege:** the CLI runs as an API-key-only user `cli-bot` (group `homelab-ops`) that may manage only the `homelab` compartment and read costs. The admin account uses MFA and is kept out of day-to-day work.
@@ -23,7 +23,7 @@ Port 853 in the security list is unused while the VM's AdGuard is off.
 
 ## AdGuard Home (stopped)
 
-**Switched off on 2026-10-27; the files stay for later.** The home AdGuard is the only DNS: the phone's DoT name is a CNAME to the home apex, the VM's container is down (`docker compose down`), the home `adguardhome-sync` sits behind the compose profile `oracle-replica`, and the 02:30 cert reload below is commented out. The home server's old failover script (`scripts/dns-failover.py`) is replaced by a gateway heartbeat. To bring it back: `docker compose up -d` here, `docker compose --profile oracle-replica up -d` in the home AdGuard stack, re-enable the cron line, and point the phone's name at the VM again. The notes below describe it as it ran.
+**Switched off on 2026-10-27; the files stay for later.** The home AdGuard is the only DNS: the phone's DoT name is a CNAME to the home apex, the VM's container is down (`docker compose down`), the home `adguardhome-sync` sits behind the compose profile `oracle-replica`, and the 02:30 cert reload below is commented out. The home server's old failover script (`scripts/dns-failover.py`) is replaced by a gateway heartbeat. To bring it back: `docker compose up -d` here, `docker compose --profile oracle-replica up -d` in the home AdGuard stack, re-enable the cron line, add TCP 853 back to the Oracle security list, and point the phone's name at the VM again. The notes below describe it as it ran.
 
 [`docker/adguardhome`](docker/adguardhome/) is a copy of the home server's AdGuard, so the phone can use either one with the same Private DNS name. The config was copied from home with three changes: web UI on port 80 inside the container, HTTPS UI off and DNS-over-QUIC off (Oracle only lets TCP 853 in).
 
@@ -36,7 +36,7 @@ Port 853 in the security list is unused while the VM's AdGuard is off.
 
 ## Public web protection (CrowdSec + GeoIP)
 
-Both block at the firewall, before a request reaches Traefik. Neither touches SSH (Tailscale only), and GeoIP leaves DoT `853` and Tailscale open worldwide.
+Both block at the firewall, before a request reaches Traefik. Neither touches SSH (Tailscale only), and GeoIP leaves Tailscale open worldwide.
 
 - **CrowdSec** ([`docker/crowdsec`](docker/crowdsec/)) reads Traefik's access log, which has every public request with the real client IP ([`acquis.yaml`](docker/crowdsec/acquis.yaml), collection `crowdsecurity/traefik`; [`host/logrotate-pangolin-traefik`](host/logrotate-pangolin-traefik) keeps 7 days). Pangolin has no CrowdSec of its own, so this stays. Its dashboard is [CrowdSec Web UI](https://github.com/TheDuffman85/crowdsec-web-ui) in the same compose: alerts, bans and metrics, its own login, no Docker socket. It logs in to CrowdSec as the machine `crowdsec-web-ui` and is Tailscale-only: `oracle-crowdsec` (Pangolin rules: Tailscale → bypass, everything else blocked) or `<TAILSCALE-IP>:3002`. It detects scans, brute force and known CVE probes, and adds the community blocklist. The host package `crowdsec-firewall-bouncer-iptables` (CrowdSec's apt repository) enforces bans as the first rule in `INPUT` and `DOCKER-USER`. An allowlist `homelab` holds the home public IP and `100.64.0.0/10`, so we can't ban ourselves.
 - **GeoIP** ([`host/geoip-allow.sh`](host/geoip-allow.sh) with its systemd units) is an `ipset` of German and Kuwaiti networks from ipdeny.com. In `DOCKER-USER`, ports 80/443 on the public interface accept only those. Certificates use DNS-01, so Let's Encrypt never needs port 80. The script refuses to apply a short or empty list, so a failed download can't block everyone. `geoip-allow.sh off` removes the rule.
@@ -107,7 +107,7 @@ The UI is on `<TAILSCALE-IP>:3001` or `oracle-uptimekuma`, over Tailscale only. 
 
 The home Dockhand manages this VM through [Hawser](docker/hawser/) in standard mode: home connects to `<TAILSCALE-IP>:2376` with a token, and the VM never connects to home.
 
-- **Where the compose files live.** Dockhand reads them on the home server, in `/opt/docker/oracle/<app>/` (same files as [`docker/`](docker/) here). On *Save & redeploy*, Hawser writes the compose file to `/opt/docker/<app>/` on the VM and runs it there, so relative paths like `./conf` stay on the VM. Tested with a throwaway stack: existing data and the other stacks were untouched.
+- **Where the compose files live.** Dockhand reads them on the home server, in `/opt/docker/oracle/<app>/` (only the compose files, the same as in [`docker/`](docker/) here; configs, scripts and data live on the VM next to them). On *Save & redeploy*, Hawser writes the compose file to `/opt/docker/<app>/` on the VM and runs it there, so relative paths like `./conf` stay on the VM. Tested with a throwaway stack: existing data and the other stacks were untouched.
 - **Keep both copies identical.** Adopting changes nothing; the first redeploy overwrites the VM's compose file with the home copy.
 - **Removing a stack** in Dockhand only stops its containers and forgets it; files stay.
 - **Adopted:** `adguardhome`, `pangolin`, `pocket-id`, `uptime-kuma`, `crowdsec`. The home copies of `pangolin` and `pocket-id` include their `.env` (mode 600), so a redeploy can't write an empty one to the VM.
