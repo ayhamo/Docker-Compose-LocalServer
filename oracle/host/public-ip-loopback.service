@@ -1,0 +1,17 @@
+# Puts the VM's public IP on the loopback interface, so traffic that Tailscale devices send to the
+# public IP through the advertised route (tailscale set --advertise-routes=<PUBLIC-IP>/32) is accepted
+# here as local and reaches Traefik with the device's Tailscale source IP (= trusted).
+# Side effect: the VM can reach its own public address (no more hairpin timeouts).
+# Install: /etc/systemd/system/public-ip-loopback.service, then systemctl enable --now public-ip-loopback
+[Unit]
+Description=Oracle public IP on loopback (Tailscale route to this VM)
+After=network.target
+Before=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/ip addr replace <PUBLIC-IP>/32 dev lo
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
