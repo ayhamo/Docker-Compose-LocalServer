@@ -1,0 +1,40 @@
+# Homelab: failed logins at the home apps behind the gateway (and home Navidrome) -> permanent ban (10 years).
+# Only one person logs in there; home's IP and Tailscale are allowlisted. Unban: cscli decisions delete --ip <ip>
+name: homelab_login_permanent
+filters:
+ - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() in ["homelab/gateway-login-fail", "homelab/home-navidrome-bf"]
+decisions:
+ - type: ban
+   duration: 87600h
+on_success: break
+---
+name: default_ip_remediation
+#debug: true
+filters:
+ - Alert.Remediation == true && Alert.GetScope() == "Ip"
+decisions:
+ - type: ban
+   duration: 4h
+# Homelab: repeat offenders get longer bans: 4 h, then 8 h, 12 h, ... (each ban the IP already had adds 4 h)
+duration_expr: Sprintf('%dh', (GetDecisionsCount(Alert.GetValue()) + 1) * 4)
+# notifications:
+#   - slack_default  # Set the webhook in /etc/crowdsec/notifications/slack.yaml before enabling this.
+#   - splunk_default # Set the splunk url and token in /etc/crowdsec/notifications/splunk.yaml before enabling this.
+#   - http_default   # Set the required http parameters in /etc/crowdsec/notifications/http.yaml before enabling this.
+#   - email_default  # Set the required email parameters in /etc/crowdsec/notifications/email.yaml before enabling this.
+on_success: break
+---
+name: default_range_remediation
+#debug: true
+filters:
+ - Alert.Remediation == true && Alert.GetScope() == "Range"
+decisions:
+ - type: ban
+   duration: 4h
+#duration_expr: Sprintf('%dh', (GetDecisionsCount(Alert.GetValue()) + 1) * 4)
+# notifications:
+#   - slack_default  # Set the webhook in /etc/crowdsec/notifications/slack.yaml before enabling this.
+#   - splunk_default # Set the splunk url and token in /etc/crowdsec/notifications/splunk.yaml before enabling this.
+#   - http_default   # Set the required http parameters in /etc/crowdsec/notifications/http.yaml before enabling this.
+#   - email_default  # Set the required email parameters in /etc/crowdsec/notifications/email.yaml before enabling this.
+on_success: break

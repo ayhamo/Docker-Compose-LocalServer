@@ -13,8 +13,20 @@ services:
       - ND_LYRICSPRIORITY=.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded,nd-lyrics,navidrome-musixmatch-plugin,navidrome-shazam-plugin,navidrome-lyricstranslate-plugin
       - ND_AGENTS=audiomuseai,apple-music,lastfm,deezer
       - "ND_PID_ALBUM=folder"
+      # Real client IPs from NPM (X-Real-IP) for the log -> CrowdSec bans on the Oracle VM. Trusting NPM also
+      # enables header login, so the header name is random (.env) and NPM removes it from every request.
+      - ND_EXTAUTH_TRUSTEDSOURCES=<NPM-PROXY-NET-IP>/32
+      - ND_EXTAUTH_USERHEADER=${ND_EXTAUTH_USERHEADER}
       - ND_LASTFM_APIKEY=${LASTFM_APIKEY}
       - ND_LASTFM_SECRET=${LASTFM_SECRET}
+    # Log also goes to CrowdSec on the Oracle VM over Tailscale (failed logins -> permanent ban there);
+    # docker logs still works (dual logging). UDP: if the VM is down, lines are just dropped.
+    logging:
+      driver: syslog
+      options:
+        syslog-address: "udp://<ORACLE-TAILSCALE-IP>:5514"
+        syslog-format: rfc5424
+        tag: navidrome
     volumes:
       - ./navidrome-data:/data
       - /mnt/hdd/music:/music
@@ -35,7 +47,7 @@ services:
     environment:
       TZ: "Europe/Berlin"
       POSTGRES_USER: audiomuse
-      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_PASSWORD: ${AUDIOMUSE_DB_PASSWORD}
       POSTGRES_DB: audiomusedb
     volumes:
       - ./audiomuse-db:/var/lib/postgresql/data
@@ -58,7 +70,7 @@ services:
       SERVICE_TYPE: "flask"
       TZ: "Europe/Berlin"
       POSTGRES_USER: audiomuse
-      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_PASSWORD: ${AUDIOMUSE_DB_PASSWORD}
       POSTGRES_DB: audiomusedb
       POSTGRES_HOST: audiomuse-postgres
       POSTGRES_PORT: "5432"
@@ -87,7 +99,7 @@ services:
       SERVICE_TYPE: "worker"
       TZ: "Europe/Berlin"
       POSTGRES_USER: audiomuse
-      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_PASSWORD: ${AUDIOMUSE_DB_PASSWORD}
       POSTGRES_DB: audiomusedb
       POSTGRES_HOST: audiomuse-postgres
       POSTGRES_PORT: "5432"

@@ -23,8 +23,7 @@ services:
       - AUTH_ENABLED=false
       - DEFAULT_USERNAME=admin
       # You will be prompted to change this password on your first login
-      - DEFAULT_PASSWORD=admin
-
+      - DEFAULT_PASSWORD=${SNAPOTTER_DEFAULT_PASSWORD}
 networks:
   proxy-net:
     external: true

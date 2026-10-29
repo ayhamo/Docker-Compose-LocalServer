@@ -25,7 +25,8 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 - **Hardened containers.** Where an image allows it, services run with `no-new-privileges` and `cap_drop: ALL`, adding back only the capabilities they need (each block is commented in its compose). Uptime Kuma has no Docker socket mount.
 - **Scheduled jobs.** Two host cron entries run before the nightly Backrest backup (03:15): `adguardhome/cert-reload.sh` at 02:30 and `sure/backup-db.sh` (a `pg_dump` of Sure, 7 days kept) at 02:50. See the tutorial, step 6.
 - **Global log rotation.** Logs are rotated for every container via `/etc/docker/daemon.json` (`local` driver, 2 × 2 MB).
-- **No secrets in this repo.** Secrets have been replaced with `<REDACTED_…>` or `<CHANGE_ME…>` placeholders, and real `.env` files are git-ignored. Copy `.env.example` → `.env` and fill it in.
+- **No secrets in this repo.** Compose files only reference `${VAR}`; the values live in each stack's `.env` (mode 600, git-ignored), and Immich Drop's in its own `immich-drop.env` (Immich's `.env` is loaded into every Immich container). Copy `.env.example` → `.env` and fill it in. A few config files keep `<REDACTED_…>` placeholders.
+- **Home Navidrome and the Oracle gateway's bans.** Home NPM's Navidrome host (custom config) takes the visitor's real IP from `X-Forwarded-For` only when the request comes from the Oracle VM (`set_real_ip_from <ORACLE-TAILSCALE-IP>`), and clears Navidrome's header-login header (`more_clear_input_headers`) from every request. Navidrome trusts only NPM (`ND_EXTAUTH_TRUSTEDSOURCES`), with a random header name in `.env`, and also sends its log by syslog to CrowdSec on the VM, which bans an IP permanently after 5 failed logins (see the Oracle README, *Ban length*). `docker logs navidrome` still works.
 
 ## Apps
 

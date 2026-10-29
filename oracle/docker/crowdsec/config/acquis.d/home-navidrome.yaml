@@ -1,0 +1,7 @@
+# Homelab: home Navidrome sends its log here by syslog over Tailscale (its compose: logging driver syslog,
+# tag navidrome). Same parser as the VM's Navidrome (homelab/navidrome-logs), own scenario homelab/home-navidrome-bf.
+source: syslog
+listen_addr: 0.0.0.0          # inside the container; the port is published on the VM's Tailscale IP only
+listen_port: 5514
+labels:
+  type: syslog

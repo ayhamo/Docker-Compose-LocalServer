@@ -18,7 +18,7 @@ services:
       # Real client IP in Navidrome's log (for CrowdSec): trust X-Forwarded-For from Traefik on proxy-net.
       # Trusting a source also enables header login; its header name is random and Traefik strips it from every request.
       - ND_EXTAUTH_TRUSTEDSOURCES=172.18.0.0/16
-      - ND_EXTAUTH_USERHEADER=X-Nd-Proxy-User-<RANDOM_HEX>
+      - ND_EXTAUTH_USERHEADER=${ND_EXTAUTH_USERHEADER}
       # Log to a file CrowdSec reads (rotated by the host's logrotate)
       - ND_LOGFILE=/data/logs/navidrome.log
     volumes:
@@ -41,7 +41,7 @@ services:
     environment:
       TZ: "Europe/Berlin"
       POSTGRES_USER: audiomuse
-      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_PASSWORD: ${AUDIOMUSE_DB_PASSWORD}
       POSTGRES_DB: audiomusedb
     volumes:
       - ./audiomuse-db:/var/lib/postgresql/data
@@ -64,7 +64,7 @@ services:
       SERVICE_TYPE: "flask"
       TZ: "Europe/Berlin"
       POSTGRES_USER: audiomuse
-      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_PASSWORD: ${AUDIOMUSE_DB_PASSWORD}
       POSTGRES_DB: audiomusedb
       POSTGRES_HOST: audiomuse-postgres
       POSTGRES_PORT: "5432"
@@ -93,7 +93,7 @@ services:
       SERVICE_TYPE: "worker"
       TZ: "Europe/Berlin"
       POSTGRES_USER: audiomuse
-      POSTGRES_PASSWORD: <REDACTED_AUDIOMUSE_DB_PASSWORD>
+      POSTGRES_PASSWORD: ${AUDIOMUSE_DB_PASSWORD}
       POSTGRES_DB: audiomusedb
       POSTGRES_HOST: audiomuse-postgres
       POSTGRES_PORT: "5432"

@@ -10,6 +10,7 @@ services:
       COLLECTIONS: "crowdsecurity/traefik crowdsecurity/base-http-scenarios crowdsecurity/http-cve crowdsecurity/whitelist-good-actors"
     ports:
       - "127.0.0.1:8080:8080"     # local API, only for the firewall bouncer on this host
+      - "<TAILSCALE-IP>:5514:5514/udp"   # syslog from home Navidrome (failed logins -> bans), Tailscale only
     volumes:
       - ./config:/etc/crowdsec
       - ./data:/var/lib/crowdsec/data
