@@ -33,6 +33,9 @@ http:
     navidrome-clip-strip:
       stripPrefix:
         prefixes: ["/rest/x-clip"]
+    radio-relay-limit:    # each listener starts an ffmpeg process: at most 3 streams per IP at once
+      inFlightReq:
+        amount: 3
 
   routers:
     # Pangolin dashboard and its login page: Tailscale only (internet: 403)
@@ -106,6 +109,15 @@ http:
       middlewares: [navidrome-rest-ratelimit, navidrome-clip-auth, navidrome-clip-strip]
       tls:
         certResolver: letsencrypt
+    # Navidrome radios that only exist as HLS (Kuwait FM): this VM's own radio-relay re-streams them as MP3.
+    # Same name as at home, so the radio URL in Navidrome works on both servers (home devices use the home relay).
+    radio-relay:
+      rule: "Host(`radio.yourdomain.dedyn.io`)"
+      service: radio-relay
+      entryPoints: [websecure]
+      middlewares: [radio-relay-limit]
+      tls:
+        certResolver: letsencrypt
     # Tailscale-only apps (Tailscale or home): from anywhere else a styled 403 instead of Pangolin's plain "Unauthorized"
     tailscale-only-apps-public:
       rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`) || Host(`oracle-backrest.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`) && !ClientIP(`<HOME-IP>/32`)"
@@ -150,6 +162,9 @@ http:
     navidrome-clips:
       loadBalancer:
         servers: [{url: "http://navidrome-clips:8080"}]
+    radio-relay:
+      loadBalancer:
+        servers: [{url: "http://radio-relay:8080"}]
     error-pages:
       loadBalancer:
         servers: [{url: "http://error-pages:8080"}]
