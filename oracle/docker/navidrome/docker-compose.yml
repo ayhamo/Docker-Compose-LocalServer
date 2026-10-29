@@ -133,9 +133,9 @@ services:
     networks:
       - proxy-net
 
-  # Per-song animated backgrounds (<song name>.background.mp4 next to the song) for the Psysonic /
+  # Per-song animated backgrounds and square cover clips (<song name>.background.mp4 / .cover.mp4 next to the song) for the Psysonic /
   # BitChord forks: Traefik routes /rest/x-clip/<folder>/<file> here after Navidrome accepts the
-  # app's login token. Read-only, serves only *.background.mp4 (see clips-nginx.conf).
+  # app's login token. Read-only, serves only *.background.mp4 and *.cover.mp4 (see clips-nginx.conf).
   navidrome-clips:
     image: nginxinc/nginx-unprivileged:alpine
     container_name: navidrome-clips

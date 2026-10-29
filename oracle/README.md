@@ -59,7 +59,7 @@ Both block at the firewall, before a request reaches Traefik. Neither touches SS
 - **Admin-only (trusted only):** Kuma, CrowdSec Web UI and Backrest add a last rule, `DROP /*`, so from anywhere else they get no login page at all; a Traefik router in front (`!ClientIP(100.64.0.0/10) && !ClientIP(<HOME-IP>/32)`) shows the styled `403` page instead of Pangolin's plain `401`. Pocket ID's admin pages and admin API are locked the same way (router `pocket-id-admin-public`).
 - **From the internet:** first the host firewall (GeoIP DE/KW, CrowdSec), then the Pocket ID passkey (*skip to identity provider*: no Pangolin login page in between), then the app's own login. Pocket ID is public so this login can happen. Of Pangolin's dashboard, the internet reaches only the resource login (`/auth/resource/`, the Pocket ID callback `/auth/idp/`, page files `/_next/`, `favicon.ico`). Everything else, including the dashboard's own login page (where cancelling Pocket ID would otherwise land) and its email + password login (the server admin account, kept as a break-glass login), answers only over Tailscale (`ipAllowList`, internet: `403`). Sign-ups are closed in both apps. The home gateway check fetches `favicon.ico` for that reason. Blocked dashboard pages and names without a resource get styled pages (`error-pages` in the Pangolin compose, the same image as home NPM's) instead of Traefik's plain `403` / `404` text.
 - **Navidrome apps:** `/rest/*` (the Subsonic API, with Navidrome's own login) passes without Pocket ID, so music apps work; Traefik limits it to 10 requests per second per IP (burst 50, then `429`). A failed app login still answers HTTP 200, so CrowdSec reads Navidrome's own log instead: Navidrome writes it to `navidrome-data/logs/navidrome.log` (`ND_LOGFILE`, rotated by [`host/logrotate-navidrome`](host/logrotate-navidrome)) with the real client IP (it trusts `X-Forwarded-For` from `proxy-net`). The local parser and scenario in [`docker/crowdsec/config`](docker/crowdsec/config/) ban an IP after 5 failed logins (web or app) within about 100 s. Trusting `proxy-net` also enables Navidrome's header login, so its header name is random and Traefik strips it (and `Remote-User`) from every incoming request (`strip-proxy-auth` on the `websecure` entrypoint; tested: the header works from inside Docker, fails from the internet).
-- **Background clips (Psysonic / BitChord forks):** `GET /rest/x-clip/<folder>/<song name>.background.mp4` serves the clip that sits next to the song. Traefik first asks Navidrome whether the app's `X-ND-Authorization` token is valid (`forwardAuth` to `/api/keepalive/keepalive`, `401` without), then `navidrome-clips` (nginx, read-only music mount, no capabilities) serves only `*.background.mp4` one folder deep; anything else is `404`. Same rate limit as `/rest`. Failed tokens log as a plain `HTTP 401` in Navidrome, which the brute-force scenario does not count.
+- **Background and cover clips (Psysonic / BitChord forks):** `GET /rest/x-clip/<folder>/<song name>.background.mp4` (or `.cover.mp4`, the square cover clip) serves the clip that sits next to the song. Traefik first asks Navidrome whether the app's `X-ND-Authorization` token is valid (`forwardAuth` to `/api/keepalive/keepalive`, `401` without), then `navidrome-clips` (nginx, read-only music mount, no capabilities) serves only `*.background.mp4` and `*.cover.mp4` one folder deep; anything else is `404`. Every answer, a `404` too, carries `Cache-Control`, which the apps need to remember "no clip". Same rate limit as `/rest`. Failed tokens log as a plain `HTTP 401` in Navidrome, which the brute-force scenario does not count.
 - **Radio relay:** Navidrome's HLS-only radios (Kuwait FM) stream from `radio.yourdomain.dedyn.io`. On the VM that name goes to the VM's own `radio-relay` (same code as home, [`../docker/navidrome/radio-relay`](../docker/navidrome/radio-relay/)); home devices reach the home relay through home NPM. Public (GeoIP + CrowdSec apply), at most 3 streams per IP at once (`inFlightReq`), because each listener starts an ffmpeg. A listener that disappears without closing is dropped after 30 s, so no ffmpeg is left running.
 - **Ban length (all scenarios):** 4 h for a first ban, then 4 h more for each ban the IP already had (8 h, 12 h, …), set by `duration_expr` in CrowdSec's `profiles.yaml`.
 - **Login lifetime:** a Pangolin session lasts 30 days and extends while used; Pocket ID's own sign-in lasts about an hour (default).
@@ -69,6 +69,20 @@ Both block at the firewall, before a request reaches Traefik. Neither touches SS
 ### Home apps through the gateway
 
 Home apps are published here one by one; everything not published stays reachable only at home or over Tailscale. Started 2026-10-28 with BentoPDF as the test app.
+
+Published (2026-10-29), all **Admin role only** except BentoPDF (also Member). The listed paths skip Pocket ID so the mobile and sync apps work; the app's own login protects them:
+
+| App | Paths without Pocket ID |
+|---|---|
+| BentoPDF, Floppy, Sure, SparkyFitness, SnapOtter | none (SnapOtter has no login of its own, so Pocket ID is its only lock) |
+| Navidrome (home) | `/rest/*`, rate-limited like the VM's (router `home-navidrome-rest` in `dynamic_config.yml`, straight to home NPM with NPM's certificate checked) |
+| Immich | `/api/*`, `/.well-known/immich` |
+| Nextcloud | `/remote.php/*`, `/ocs/*`, `/status.php`, `/index.php/login/v2/poll`, `/login/v2/poll`, `/.well-known/*` |
+| Immich Drop | resource exists but is **disabled** (its NPM line is commented out) |
+
+- **Never published:** Dockhand (Docker socket), NPM admin, Backrest, Kuma, AdGuard, GPTWOL, Dynacat, lastGLANCE, Pinchflat, the Nextcloud AIO admin. The Oracle Kuma monitor "Home NPM blocks the VM" checks Dockhand for that reason.
+- **Real client IPs in Nextcloud:** `trusted_proxies` also lists the VM's Tailscale IP, so its brute-force protection counts each visitor, not the VM (Traefik overwrites any `X-Forwarded-For` a client sends). AIO may reset `config.php` on updates: check `occ config:system:get trusted_proxies` after one.
+- **No home AdGuard changes:** at home and on Tailscale these names keep going straight to home NPM; only devices without Tailscale take the gateway.
 
 ```
  phone / friend (no Tailscale) ─► public DNS: *.yourdomain.dedyn.io → VM
@@ -91,6 +105,7 @@ To publish another app: Pangolin resource (as above), a line in `http_top.conf` 
 - **Copied from home on 2026-10-28:** Navidrome's database (users, playlists, play counts, radios, plugin settings) through SQLite's online backup, the plugins, the radio images, `.env` (Last.fm keys), and AudioMuse's database through `pg_dump` / `pg_restore` (Postgres data files are not portable between x86 and ARM). Not copied: music, `artwork/hashed` and `cache` (rebuilt on demand).
 - **Music not there yet.** A full scan marks every song *missing* instead of deleting it, so playlists, play counts and AudioMuse's matches come back when the files arrive at the same paths.
 - **Public access:** see *Admin links* above (`/rest` past Pocket ID with a rate limit).
+- **AudioMuse UI:** `oracle-audiomuse.yourdomain.dedyn.io`, a plain Traefik router (not a Pangolin resource) with `tailscale-only`: Tailscale or home only, everyone else gets the styled 403. AudioMuse has no login of its own. Home AdGuard has a self-rewrite for the name, like the other `oracle-*` links.
 
 ## Uptime Kuma (watching home)
 

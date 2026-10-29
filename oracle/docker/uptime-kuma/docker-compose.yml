@@ -10,9 +10,9 @@ services:
     volumes:
       - ./data:/app/data
     extra_hosts:
-      # "Home NPM blocks the VM" monitor: an unpublished home app over Tailscale must answer 403
+      # "Home NPM blocks the VM" monitor: an unpublished home app (Dockhand, never published) over Tailscale must answer 403
       # (on the VM, *.yourdomain resolves to the VM itself)
-      - "immich.yourdomain.dedyn.io:<HOME-TAILSCALE-IP>"
+      - "dockhand.yourdomain.dedyn.io:<HOME-TAILSCALE-IP>"
     networks:
       - proxy-net                     # VM NPM reaches it as uptime-kuma:3001 (Tailscale-only host)
     healthcheck:
