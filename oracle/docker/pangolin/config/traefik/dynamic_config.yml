@@ -1,3 +1,4 @@
+# home-ip <HOME-IP>   (home's internet IP counts like Tailscale; /usr/local/sbin/home-ip-trust.py swaps it when it changes)
 http:
   middlewares:
     strip-proxy-auth:     # on every request (entrypoint): nobody can send a login header to Navidrome
@@ -19,7 +20,7 @@ http:
           disableForwardAuth: true
     tailscale-only:
       ipAllowList:
-        sourceRange: ["100.64.0.0/10"]
+        sourceRange: ["100.64.0.0/10", "<HOME-IP>/32"]   # Tailscale + home
     navidrome-rest-ratelimit:
       rateLimit:          # per client IP; Subsonic apps stay well below this, password guessing does not
         average: 10
@@ -89,9 +90,9 @@ http:
       middlewares: [navidrome-rest-ratelimit]
       tls:
         certResolver: letsencrypt
-    # Tailscale-only apps: from the internet a styled 403 instead of Pangolin's plain "Unauthorized"
+    # Tailscale-only apps (Tailscale or home): from anywhere else a styled 403 instead of Pangolin's plain "Unauthorized"
     tailscale-only-apps-public:
-      rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`) || Host(`oracle-backrest.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`)"
+      rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`) || Host(`oracle-backrest.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`) && !ClientIP(`<HOME-IP>/32`)"
       priority: 10000
       service: error-pages
       entryPoints: [websecure]
@@ -101,7 +102,7 @@ http:
 
     # Pocket ID admin (pages + admin-only API, from the v2.19.1 routes): Tailscale only. Login, passkeys, "My account" and OIDC stay public.
     pocket-id-admin-public:
-      rule: 'Host(`oracle-pocketid.yourdomain.dedyn.io`) && !ClientIP(`100.64.0.0/10`) && (PathPrefix(`/settings/admin`) || PathPrefix(`/api/application-configuration/`) || (Path(`/api/application-configuration`) && !Method(`GET`)) || (PathPrefix(`/api/application-images/`) && !Method(`GET`)) || PathPrefix(`/api/custom-claims`) || PathPrefix(`/api/user-groups`) || PathPrefix(`/api/signup-tokens`) || PathPrefix(`/api/apis`) || PathPrefix(`/api/api-access`) || PathPrefix(`/api/scim/`) || PathPrefix(`/api/oidc/logo-presets`) || PathPrefix(`/api/audit-logs/all`) || PathPrefix(`/api/audit-logs/filters/`) || (PathRegexp(`^/api/oidc/clients(/|$)`) && !(Method(`GET`) && PathRegexp(`^/api/oidc/clients/[^/]+/logo$`))) || (PathRegexp(`^/api/oidc/users/[^/]+/`) && !PathPrefix(`/api/oidc/users/me/`)) || Path(`/api/users`) || (PathRegexp(`^/api/users/[^/]+`) && !PathPrefix(`/api/users/me`) && !(Method(`GET`) && PathRegexp(`^/api/users/[^/]+/profile-picture\.png$`))))'
+      rule: 'Host(`oracle-pocketid.yourdomain.dedyn.io`) && !ClientIP(`100.64.0.0/10`) && !ClientIP(`<HOME-IP>/32`) && (PathPrefix(`/settings/admin`) || PathPrefix(`/api/application-configuration/`) || (Path(`/api/application-configuration`) && !Method(`GET`)) || (PathPrefix(`/api/application-images/`) && !Method(`GET`)) || PathPrefix(`/api/custom-claims`) || PathPrefix(`/api/user-groups`) || PathPrefix(`/api/signup-tokens`) || PathPrefix(`/api/apis`) || PathPrefix(`/api/api-access`) || PathPrefix(`/api/scim/`) || PathPrefix(`/api/oidc/logo-presets`) || PathPrefix(`/api/audit-logs/all`) || PathPrefix(`/api/audit-logs/filters/`) || (PathRegexp(`^/api/oidc/clients(/|$)`) && !(Method(`GET`) && PathRegexp(`^/api/oidc/clients/[^/]+/logo$`))) || (PathRegexp(`^/api/oidc/users/[^/]+/`) && !PathPrefix(`/api/oidc/users/me/`)) || Path(`/api/users`) || (PathRegexp(`^/api/users/[^/]+`) && !PathPrefix(`/api/users/me`) && !(Method(`GET`) && PathRegexp(`^/api/users/[^/]+/profile-picture\.png$`))))'
       priority: 10000
       service: error-pages
       entryPoints: [websecure]
