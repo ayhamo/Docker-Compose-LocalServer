@@ -26,6 +26,13 @@ http:
         average: 10
         period: 1s
         burst: 50
+    navidrome-clip-auth:  # clips only for a logged-in Navidrome user: Navidrome checks the app's token (401 without)
+      forwardAuth:
+        address: "http://navidrome:4533/api/keepalive/keepalive"
+        authRequestHeaders: ["X-ND-Authorization"]
+    navidrome-clip-strip:
+      stripPrefix:
+        prefixes: ["/rest/x-clip"]
 
   routers:
     # Pangolin dashboard and its login page: Tailscale only (internet: 403)
@@ -90,6 +97,15 @@ http:
       middlewares: [navidrome-rest-ratelimit]
       tls:
         certResolver: letsencrypt
+    # Per-song background clips for the Psysonic / BitChord forks: /rest/x-clip/<folder>/<file> -> navidrome-clips
+    navidrome-clips:
+      rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest/x-clip/`)"
+      priority: 1100
+      service: navidrome-clips
+      entryPoints: [websecure]
+      middlewares: [navidrome-rest-ratelimit, navidrome-clip-auth, navidrome-clip-strip]
+      tls:
+        certResolver: letsencrypt
     # Tailscale-only apps (Tailscale or home): from anywhere else a styled 403 instead of Pangolin's plain "Unauthorized"
     tailscale-only-apps-public:
       rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`) || Host(`oracle-backrest.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`) && !ClientIP(`<HOME-IP>/32`)"
@@ -131,6 +147,9 @@ http:
     navidrome:
       loadBalancer:
         servers: [{url: "http://navidrome:4533"}]
+    navidrome-clips:
+      loadBalancer:
+        servers: [{url: "http://navidrome-clips:8080"}]
     error-pages:
       loadBalancer:
         servers: [{url: "http://error-pages:8080"}]

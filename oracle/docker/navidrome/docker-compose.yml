@@ -133,6 +133,32 @@ services:
     networks:
       - proxy-net
 
+  # Per-song animated backgrounds (<song name>.background.mp4 next to the song) for the Psysonic /
+  # BitChord forks: Traefik routes /rest/x-clip/<folder>/<file> here after Navidrome accepts the
+  # app's login token. Read-only, serves only *.background.mp4 (see clips-nginx.conf).
+  navidrome-clips:
+    image: nginxinc/nginx-unprivileged:alpine
+    container_name: navidrome-clips
+    restart: unless-stopped
+    volumes:
+      - ./music:/music:ro
+      - ./clips-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 32m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 600s
+      timeout: 5s
+      retries: 3
+    networks:
+      - proxy-net
+
 networks:
   proxy-net:
     external: true
