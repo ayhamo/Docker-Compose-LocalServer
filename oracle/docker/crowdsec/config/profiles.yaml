@@ -1,11 +1,11 @@
-# Homelab: failed logins at the home apps behind the gateway (and home Navidrome) -> permanent ban (10 years).
+# Homelab: failed logins at the home apps behind the gateway -> 6-month ban (4380 h).
 # Only one person logs in there; home's IP and Tailscale are allowlisted. Unban: cscli decisions delete --ip <ip>
-name: homelab_login_permanent
+name: homelab_login_6months
 filters:
- - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() in ["homelab/gateway-login-fail", "homelab/home-navidrome-bf"]
+ - Alert.Remediation == true && Alert.GetScope() == "Ip" && Alert.GetScenario() == "homelab/gateway-login-fail"
 decisions:
  - type: ban
-   duration: 87600h
+   duration: 4380h
 on_success: break
 ---
 name: default_ip_remediation

@@ -26,7 +26,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 - **Scheduled jobs.** Two host cron entries run before the nightly Backrest backup (03:15): `adguardhome/cert-reload.sh` at 02:30 and `sure/backup-db.sh` (a `pg_dump` of Sure, 7 days kept) at 02:50. See the tutorial, step 6.
 - **Global log rotation.** Logs are rotated for every container via `/etc/docker/daemon.json` (`local` driver, 2 × 2 MB).
 - **No secrets in this repo.** Compose files only reference `${VAR}`; the values live in each stack's `.env` (mode 600, git-ignored), and Immich Drop's in its own `immich-drop.env` (Immich's `.env` is loaded into every Immich container). Copy `.env.example` → `.env` and fill it in. A few config files keep `<REDACTED_…>` placeholders.
-- **Home Navidrome and the Oracle gateway's bans.** Home NPM's Navidrome host (custom config) takes the visitor's real IP from `X-Forwarded-For` only when the request comes from the Oracle VM (`set_real_ip_from <ORACLE-TAILSCALE-IP>`), and clears Navidrome's header-login header (`more_clear_input_headers`) from every request. Navidrome trusts only NPM (`ND_EXTAUTH_TRUSTEDSOURCES`), with a random header name in `.env`, and also sends its log by syslog to CrowdSec on the VM, which bans an IP permanently after 5 failed logins (see the Oracle README, *Ban length*). `docker logs navidrome` still works. Its gateway access (with Immich, Nextcloud and SparkyFitness) is disabled since 2026-10-29 until the passwords are changed; see the Oracle README.
+- **Home Navidrome is a backup, home and Tailscale only.** The Oracle VM's Navidrome is the main one. Home Navidrome is not on the Oracle gateway (removed 2026-10-29), so it needs no proxy trust, header login or log shipping.
 
 ## Apps
 

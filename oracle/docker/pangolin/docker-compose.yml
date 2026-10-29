@@ -50,7 +50,8 @@ services:
         aliases:
           # public DNS sends this name home; Pangolin's login calls reach Pocket ID through Traefik here
           - oracle-pocketid.yourdomain.dedyn.io
-      proxy-net: {}                 # reaches the apps by container name
+      proxy-net:                    # reaches the apps by container name
+        ipv4_address: 172.18.255.250   # fixed: Navidrome trusts only this address (ND_EXTAUTH_TRUSTEDSOURCES)
 
   error-pages:
     # Styled error pages (same as home NPM): Traefik shows them for blocked dashboard pages and unknown names

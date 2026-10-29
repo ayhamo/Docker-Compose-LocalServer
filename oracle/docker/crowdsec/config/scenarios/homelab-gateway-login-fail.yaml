@@ -1,12 +1,11 @@
 # Homelab: 5 failed logins at the home apps behind the gateway, at any pace (one count leaks away only
-# every 30 days) -> permanent ban (profiles.yaml). Only one person logs in there, so there is no guessing.
+# every 30 days) -> 6-month ban (profiles.yaml). Only one person logs in there, so there is no guessing.
 # Counted: a wrong password at a login endpoint, answered 401 by the app itself (Traefik's server URL is set;
 # the gateway's own "log in with Pocket ID first" 401 has "-" and never counts): Immich /api/auth/login,
-# SparkyFitness /api/auth/sign-in/email, Navidrome web /auth/login. Other 401s (expired tokens, WebDAV
+# SparkyFitness /api/auth/sign-in/email, Navidrome-style web /auth/login. Other 401s (expired tokens, WebDAV
 # clients connecting before they send the password) are not guesses and don't count.
-# Not here: Nextcloud (its own brute-force protection, real client IPs via trusted_proxies), Oracle's
-# Navidrome (friends; homelab/navidrome-bf, 4 h bans) and home Navidrome's /rest (answers 200 on a wrong
-# password; see homelab/home-navidrome-bf).
+# Not here: Nextcloud (its own brute-force protection, real client IPs via trusted_proxies) and Oracle's
+# Navidrome (friends; homelab/navidrome-bf, 4 h bans). Home Navidrome is not on the gateway (Tailscale/LAN only).
 type: leaky
 name: homelab/gateway-login-fail
 description: "Failed logins at home apps behind the gateway (any pace)"

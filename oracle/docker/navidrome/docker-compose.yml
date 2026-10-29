@@ -15,9 +15,10 @@ services:
       - "ND_PID_ALBUM=folder"
       - ND_LASTFM_APIKEY=${LASTFM_APIKEY}
       - ND_LASTFM_SECRET=${LASTFM_SECRET}
-      # Real client IP in Navidrome's log (for CrowdSec): trust X-Forwarded-For from Traefik on proxy-net.
-      # Trusting a source also enables header login; its header name is random and Traefik strips it from every request.
-      - ND_EXTAUTH_TRUSTEDSOURCES=172.18.0.0/16
+      # Real client IP in Navidrome's log (for CrowdSec): trust X-Forwarded-For only from Traefik's fixed
+      # proxy-net address (Pangolin compose), not from other containers. Trusting a source also enables header
+      # login; its header name is random and Traefik strips it from every request.
+      - ND_EXTAUTH_TRUSTEDSOURCES=172.18.255.250/32
       - ND_EXTAUTH_USERHEADER=${ND_EXTAUTH_USERHEADER}
       # Log to a file CrowdSec reads (rotated by the host's logrotate)
       - ND_LOGFILE=/data/logs/navidrome.log
