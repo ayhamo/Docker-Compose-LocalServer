@@ -1,0 +1,21 @@
+# Home: Tailscale clients keep their real 100.x address when they reach a container (NPM).
+# Tailscale marks everything arriving on tailscale0 (0x40000) and masquerades marked packets;
+# since the 28 Oct 2026 Tailscale update its rules run before Docker's, so NPM saw every
+# Tailscale client (the Oracle VM too) as the bridge IP and the per-IP rules in http_top.conf
+# stopped matching. Clearing just that bit on packets going into a Docker bridge skips the
+# masquerade there, whatever order the chains are in; exit-node and LAN-route traffic keep it.
+# Install: /etc/systemd/system/tailscale-docker-realip.service, systemctl enable --now
+[Unit]
+Description=Keep Tailscale clients' real IPs toward Docker containers
+Before=tailscaled.service docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/iptables -t mangle -A POSTROUTING -o br-+ -j MARK --and-mark 0xfffbffff
+ExecStart=/usr/sbin/iptables -t mangle -A POSTROUTING -o docker0 -j MARK --and-mark 0xfffbffff
+ExecStop=/usr/sbin/iptables -t mangle -D POSTROUTING -o br-+ -j MARK --and-mark 0xfffbffff
+ExecStop=/usr/sbin/iptables -t mangle -D POSTROUTING -o docker0 -j MARK --and-mark 0xfffbffff
+
+[Install]
+WantedBy=multi-user.target

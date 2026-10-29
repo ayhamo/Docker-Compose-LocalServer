@@ -2,8 +2,9 @@
 # Home's internet IP counts like Tailscale on the gateway: admin pages open from home, and Pangolin
 # lets home through without its login (same as Tailscale). yourdomain.dedyn.io (no subdomain) is home's
 # current IP, kept up to date by home's deSEC updater. Root cron, every 5 minutes: when that IP changes,
-# swap the old /32 for the new one in Traefik's rules (file reloads by itself) and in Pangolin's
-# resource rules. Prints only when something changed.
+# swap the old /32 for the new one in Traefik's rules (file reloads by itself), in Pangolin's
+# resource rules and in CrowdSec's "homelab" allowlist (so failed logins from home never ban the house).
+# Prints only when something changed.
 import os
 import re
 import sqlite3
@@ -38,4 +39,9 @@ n = db.execute("update resourcePolicyRules set value = ? where match = 'CIDR' an
                (f"{new}/32", f"{old}/32")).rowcount
 db.commit()
 db.close()
-print(f"home IP {old} -> {new}: Traefik updated, {n} Pangolin rules updated")
+
+# new one first, then the old one: no moment without the allowlist entry
+cscli = ["docker", "exec", "crowdsec", "cscli", "allowlists"]
+subprocess.run(cscli + ["add", "homelab", new, "-d", "home internet IP"], check=True, capture_output=True, timeout=60)
+subprocess.run(cscli + ["remove", "homelab", old], check=True, capture_output=True, timeout=60)
+print(f"home IP {old} -> {new}: Traefik updated, {n} Pangolin rules updated, CrowdSec allowlist updated")

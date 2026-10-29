@@ -78,7 +78,7 @@ Home apps are published here one by one; everything not published stays reachabl
 
 - **DNS (deSEC).** `*` is an A record to the VM's public IP. The apex keeps the home IP (DDNS), and the phone's DoT name is a CNAME to the apex, so DNS-over-TLS still goes home. No per-app records.
 - **Pangolin resource.** Same name as at home (e.g. `bentopdf`), target `https://<HOME-TAILSCALE-IP>:443`, *TLS server name* and *Host header* set to the app's name so home NPM picks the right host (Pangolin's Traefik does not verify backend certificates, `insecureSkipVerify`; the hop runs inside Tailscale's encryption). Rule: from `100.64.0.0/10` → bypass; skip to identity provider Pocket ID. Who may open it is set per resource (roles or users).
-- **Home NPM.** [`http_top.conf`](../docker/nginx-proxy-manager/data/nginx/custom/http_top.conf) maps requests from the VM's Tailscale IP to `403` unless the host is listed, and [`server_proxy.conf`](../docker/nginx-proxy-manager/data/nginx/custom/server_proxy.conf) (included by every proxy host) enforces it. A broken-into VM can reach port 443 but none of the unpublished apps.
+- **Home NPM.** [`http_top.conf`](../docker/nginx-proxy-manager/data/nginx/custom/http_top.conf) maps requests from the VM's Tailscale IP to `403` unless the host is listed, and [`server_proxy.conf`](../docker/nginx-proxy-manager/data/nginx/custom/server_proxy.conf) (included by every proxy host) enforces it. A broken-into VM can reach port 443 but none of the unpublished apps. This needs NPM to see the VM's real IP: [`tailscale-docker-realip.service`](../docker/scripts/tailscale-docker-realip.service) at home keeps Tailscale from rewriting it, and the Oracle Kuma monitor "Home NPM blocks the VM" checks it.
 - **Home AdGuard.** At home and on Tailscale the name keeps pointing at the home server. A published app gets a self-rewrite (it leaves the `*.yourdomain` wildcard rewrite), then `||app^$dnsrewrite=<HOME-LAN-IP>` for everyone plus `@@||app^$dnsrewrite,client='<PHONE-CLIENT-NAME>'`, so the phone (which always asks over DoT) gets public DNS and reaches the app through the gateway with Tailscale off. `$client` matches the persistent client's **name**; a ClientID there never matches (tested).
 - **The home server itself** resolves through the router, which now answers with the VM. `/etc/hosts` pins `uptimekuma.yourdomain.dedyn.io` to `127.0.0.1` / `::1`, so its cron pushes still reach the home Kuma.
 
@@ -94,11 +94,12 @@ To publish another app: Pangolin resource (as above), a line in `http_top.conf` 
 
 ## Uptime Kuma (watching home)
 
-[`docker/uptime-kuma`](docker/uptime-kuma/) watches the home server from outside, so an alert still goes out when the home internet is down. It started as a copy of the home Kuma database, giving the same login and Discord alert, with the home monitors and history removed. It has three monitors:
+[`docker/uptime-kuma`](docker/uptime-kuma/) watches the home server from outside, so an alert still goes out when the home internet is down. It started as a copy of the home Kuma database, giving the same login and Discord alert, with the home monitors and history removed. It has four monitors:
 
 - **Home internet (DoT 853)**: TCP check of the home public DoT port every 60 s (home internet, router forward, home AdGuard).
 - **Home server heartbeat**: a push the home server sends every minute from its crontab, with the token in the cron line. Silence means the server is off or offline.
-- **Oracle Backup → GDrive**: the push at the end of the 04:00 upload (see the schedule).
+- **Oracle Backup → GDrive**: pushed by the 04:00 upload (see the schedule): up when it ran, down with the reason when it skipped or failed.
+- **Home NPM blocks the VM**: every 10 min Kuma opens an unpublished home app (`immich`, pinned to home's Tailscale IP with `extra_hosts`, since on the VM the name resolves to the VM itself) and only `403` counts as up. A `200` means home NPM no longer sees the VM's real IP (see [the home README](../README.md#how-it-fits-together)).
 
 The UI is on `<TAILSCALE-IP>:3001` or `oracle-uptimekuma`, over Tailscale only. In the other direction, the home server opens Pangolin's dashboard every minute and pushes to the home Kuma ("Oracle gateway (Pangolin)").
 
@@ -125,11 +126,11 @@ All times Europe/Berlin, read from the VM's timers and crontab. The slots match 
 | 02:00 | apt: download package lists | systemd `apt-daily.timer` |
 | 03:00 | Database copies: consistent `.snapshot` copies of the 6 SQLite databases (Pocket ID, Pangolin, Kuma, Navidrome, CrowdSec, CrowdSec Web UI `state.db`) through SQLite's online backup, no container stop ([`host/oracle-db-snapshots.py`](host/oracle-db-snapshots.py)) | root crontab |
 | 03:15 | Backrest: backup of `/opt/docker` (music and caches excluded); keeps 7 daily, 4 weekly, 6 monthly; prune and check on the 1st at 00:00 ([`docker/backrest`](docker/backrest/)) | Backrest |
-| 04:00 | Upload of the Backrest repo to Google Drive (`System & Backups/Local Server Backup/oracle-backup (Backrest)`), only if tonight's database copies and backup exist; then a push to Oracle's Kuma monitor "Oracle Backup → GDrive" | root crontab |
+| 04:00 | Upload of the Backrest repo to Google Drive (`System & Backups/Local Server Backup/oracle-backup (Backrest)`), only if tonight's database copies and backup exist ([`host/oracle-gdrive-upload.sh`](host/oracle-gdrive-upload.sh)); pushes up to Oracle's Kuma monitor "Oracle Backup → GDrive", or down with the reason (also logged) when it skips | root crontab |
 | 04:15 | Unattended upgrades: Ubuntu security and regular updates; old kernels and unused packages removed | systemd `apt-daily-upgrade.timer` |
 | 04:45 | Reboot, only if an update requires it | unattended-upgrades |
 | Mon 01:10 | GeoIP: refresh the DE and KW country lists and re-apply the 80/443 rule | systemd `geoip-allow-update.timer` |
-| Every 5 min | Home IP trust: home's internet IP (`yourdomain.dedyn.io`, no subdomain) counts like Tailscale, so admin pages open from home and Pangolin lets home through without its login. When the IP changes, the old `/32` is swapped for the new one in Traefik's rules and Pangolin's resource rules ([`host/home-ip-trust.py`](host/home-ip-trust.py)) | root crontab |
+| Every 5 min | Home IP trust: home's internet IP (`yourdomain.dedyn.io`, no subdomain) counts like Tailscale, so admin pages open from home and Pangolin lets home through without its login. When the IP changes, the old `/32` is swapped for the new one in Traefik's rules, Pangolin's resource rules and CrowdSec's `homelab` allowlist ([`host/home-ip-trust.py`](host/home-ip-trust.py)) | root crontab |
 | Every 60 s | Uptime Kuma checks the home internet (public DoT port); the home server pushes a heartbeat every minute, and checks Oracle's gateway for home Kuma | Uptime Kuma, home crontab |
 | Weekly (Mon, random time) | SSD trim | systemd `fstrim.timer` |
 | Daily | Traefik checks its certificates and renews them about 30 days before expiry | Traefik (Pangolin) |
