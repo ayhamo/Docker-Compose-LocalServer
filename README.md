@@ -21,17 +21,19 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 - **No published ports for web apps.** Every app with a web UI has its `ports:` section commented out and joins the external `proxy-net` network. Nginx Proxy Manager (NPM) reaches it as `http://<container_name>:<internal port>`, then adds your domain and SSL on top.
 - **A single wildcard certificate.** NPM requests `*.yourdomain.dedyn.io` from Let's Encrypt using a deSEC DNS challenge. AdGuard Home reuses that same certificate for DNS-over-TLS and its HTTPS UI. A small `cert-sync` sidecar copies it from NPM's `letsencrypt/` folder into `adguardhome/certs/` every hour, and `cert-reload.sh` (daily cron) restarts AdGuard when the cert it serves differs from the synced one.
 - **Host-network apps.** AdGuard Home and GPTWOL use `network_mode: host` because they need raw DNS/ARP/WoL access. NPM reaches them by the server's LAN IP rather than a container name.
+- **Tailscale clients keep their real IP in NPM.** Tailscale masquerades everything it forwards, and since its 28 Oct 2026 update its rules run before Docker's, so NPM saw every Tailscale client (the Oracle VM too) as the `proxy-net` gateway and the VM's per-IP limit in `http_top.conf` stopped matching. [`scripts/tailscale-docker-realip.service`](docker/scripts/tailscale-docker-realip.service) (in `/etc/systemd/system`, enabled) clears Tailscale's mark on packets going into Docker bridges at every boot, so those skip the masquerade whatever the rule order; exit-node and LAN-route traffic keep it.
 - **Hardened containers.** Where an image allows it, services run with `no-new-privileges` and `cap_drop: ALL`, adding back only the capabilities they need (each block is commented in its compose). Uptime Kuma has no Docker socket mount.
 - **Scheduled jobs.** Two host cron entries run before the nightly Backrest backup (03:15): `adguardhome/cert-reload.sh` at 02:30 and `sure/backup-db.sh` (a `pg_dump` of Sure, 7 days kept) at 02:50. See the tutorial, step 6.
 - **Global log rotation.** Logs are rotated for every container via `/etc/docker/daemon.json` (`local` driver, 2 × 2 MB).
-- **No secrets in this repo.** Secrets have been replaced with `<REDACTED_…>` or `<CHANGE_ME…>` placeholders, and real `.env` files are git-ignored. Copy `.env.example` → `.env` and fill it in.
+- **No secrets in this repo.** Compose files only reference `${VAR}`; the values live in each stack's `.env` (mode 600, git-ignored), and Immich Drop's in its own `immich-drop.env` (Immich's `.env` is loaded into every Immich container). Copy `.env.example` → `.env` and fill it in. A few config files keep `<REDACTED_…>` placeholders.
+- **Home Navidrome is a backup, home and Tailscale only.** The Oracle VM's Navidrome is the main one. Home Navidrome is not on the Oracle gateway (removed 2026-10-29), so it needs no proxy trust, header login or log shipping.
 
 ## Apps
 
 | App | Folder | What it is | Reached via |
 |---|---|---|---|
 | [Nginx Proxy Manager](https://nginxproxymanager.com) | `nginx-proxy-manager` | Reverse proxy and SSL, plus [error-pages](https://github.com/tarampampam/error-pages) | host `80`, `443`, `81` |
-| [AdGuard Home](https://adguard.com/adguard-home.html) | `adguardhome` | Network-wide DNS ad-blocking; DoT and HTTPS use NPM's cert. Includes [adguardhome-sync](https://github.com/bakito/adguardhome-sync), which copies the settings hourly to the Oracle VM's AdGuard (home is the origin; TLS and DHCP not synced) | host network: DNS `53`, DoT `853`, UI `8880` / `8443` |
+| [AdGuard Home](https://adguard.com/adguard-home.html) | `adguardhome` | Network-wide DNS ad-blocking; DoT and HTTPS use NPM's cert. Includes [adguardhome-sync](https://github.com/bakito/adguardhome-sync) for the Oracle VM's AdGuard, paused behind the compose profile `oracle-replica` while that AdGuard is off | host network: DNS `53`, DoT `853`, UI `8880` / `8443` |
 | [Dockhand](https://hub.docker.com/r/fnsys/dockhand) | `dockhand` | Web UI for managing the compose stacks | `dockhand:3000` |
 | [Uptime Kuma](https://github.com/louislam/uptime-kuma) | `uptime-kuma` | Uptime monitoring | `uptime-kuma:3001` |
 | [Backrest](https://github.com/garethgeorge/backrest) | `backrest` | Restic backup UI, backs up `/opt/docker` read-only | `backrest:9898` |
@@ -52,7 +54,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 
 ## Oracle Cloud VM
 
-A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet, starting with Pangolin (Traefik with Pocket ID passkey login) as the public gateway and AdGuard DNS-over-TLS for the phone, while the data stays at home. SSH and every admin UI are reachable over Tailscale only, and a Tailscale ACL stops the VM from reaching anything at home. Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
+A second, public-facing server runs on Oracle Cloud's Always Free tier (ARM, 2 OCPU, 12 GB RAM). It hosts what must stay reachable from the internet: Pangolin (Traefik with Pocket ID passkey login) as the public gateway, which also publishes chosen home apps, while the data stays at home. Public DNS sends `*.yourdomain.dedyn.io` to the VM; the home AdGuard keeps sending home devices straight to the home server. SSH and every admin UI are reachable over Tailscale only. A Tailscale ACL lets the VM reach only NPM's port 443 at home, and NPM answers the VM with `403` for every app not on its published list ([`http_top.conf`](docker/nginx-proxy-manager/data/nginx/custom/http_top.conf)). Setup, security layers and host configuration are in **[oracle/README.md](oracle/README.md)**.
 
 ## Scheduled jobs (home server)
 
@@ -61,9 +63,8 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | When | Job | Runs from |
 |---|---|---|
 | Every 30 min (:13, :43) | deSEC DynDNS update of the home IP, with an Uptime Kuma heartbeat | root crontab |
-| Every minute | Phone DNS failover: DNS-over-TLS check of the Oracle VM as the phone uses it, reported to Uptime Kuma; after 3 failures the phone's DoT name points home, after 10 good checks back to the VM (`scripts/dns-failover.py`) | user crontab |
+| Every minute | Oracle gateway check: opens Pangolin's dashboard on the VM and pushes to the home Kuma monitor "Oracle gateway (Pangolin)" (replaced the phone DNS failover, `scripts/dns-failover.py`, kept on disk) | user crontab |
 | Every minute | Heartbeat to the Uptime Kuma on the Oracle VM (silence there = home down) | user crontab |
-| Hourly (:00) | AdGuard settings → Oracle VM's AdGuard (filters, rules, rewrites, clients, DNS settings; not TLS) | adguardhome-sync (in the `adguardhome` stack) |
 | 00:00 Mon–Fri (23:00 Sun–Thu) | Sure: stock price import | Sure (UTC) |
 | 00:00 on the 1st | Backrest prune and check | Backrest |
 | 01:00 | Dockhand: check all containers for updates (no auto-install) and cleanups; Mondays also prune unused images | Dockhand |

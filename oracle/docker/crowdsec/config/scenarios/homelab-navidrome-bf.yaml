@@ -1,0 +1,14 @@
+# Homelab: 5 failed Navidrome logins (web or music app) from one IP within ~100 s -> ban (see profiles.yaml for the length)
+type: leaky
+name: homelab/navidrome-bf
+description: "Navidrome login brute force (web UI and Subsonic API)"
+filter: "evt.Meta.log_type == 'navidrome_failed_auth' && evt.Meta.source_ip != ''"
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 20s
+blackhole: 1m
+labels:
+  service: navidrome
+  behavior: generic:bruteforce
+  label: "Navidrome login brute force"
+  remediation: true

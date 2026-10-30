@@ -98,6 +98,8 @@ services:
 
   immich-drop: # to allow login less dropping of photos
     container_name: immich_drop
+    env_file:
+      - immich-drop.env   # IMMICH_API_KEY, ADMIN_PASSWORD (600, not in git)
     image: ghcr.io/nasogaa/immich-drop:latest
     restart: always
     #ports:
@@ -105,10 +107,8 @@ services:
     environment:
       # --- Connection to Immich (Uses Docker internal DNS) ---
       IMMICH_BASE_URL: "http://immich-server:2283/api"
-      IMMICH_API_KEY: "<REDACTED_IMMICH_API_KEY>"
 
       # --- Admin & Security ---
-      ADMIN_PASSWORD: "<REDACTED_IMMICH_DROP_ADMIN_PASSWORD>"
 
       # --- Upload & Album Options ---
       IMMICH_ALBUM_NAME: "Guest Drop"        # Default target album if not specified in link

@@ -38,7 +38,7 @@ services:
   cert-sync:
     # Exports the wildcard cert from Traefik's (Pangolin) acme.json as PEM for AdGuard, every hour.
     # cert-reload.sh (cron 02:30) restarts AdGuard when the served cert differs.
-    image: ldez/traefik-certs-dumper:v2.11.4
+    image: ldez/traefik-certs-dumper:latest
     container_name: adguard-cert-sync
     restart: unless-stopped
     network_mode: none

@@ -1,51 +1,158 @@
+# home-ip <HOME-IP>   (home's internet IP counts like Tailscale; /usr/local/sbin/home-ip-trust.py swaps it when it changes)
 http:
   middlewares:
+    strip-proxy-auth:     # on every request (entrypoint): nobody can send a login header to Navidrome
+      headers:
+        customRequestHeaders:
+          Remote-User: ""
+          X-Nd-Proxy-User-<RANDOM_HEX>: ""
+    show-403:
+      replacePath:
+        path: "/403.html"
+    error-pages:
+      errors:
+        status: ["403", "404"]
+        service: error-pages
+        query: "/{status}.html"
     badger:
       plugin:
         badger:
           disableForwardAuth: true
     tailscale-only:
       ipAllowList:
-        sourceRange: ["100.64.0.0/10"]
-    tailscale-or-docker:
-      ipAllowList:
-        sourceRange: ["100.64.0.0/10", "172.16.0.0/12"]   # + Pangolin server-to-server calls (Docker networks)
+        sourceRange: ["100.64.0.0/10", "<HOME-IP>/32"]   # Tailscale + home
+    navidrome-rest-ratelimit:
+      rateLimit:          # per client IP; Subsonic apps stay well below this, password guessing does not
+        average: 10
+        period: 1s
+        burst: 50
+    navidrome-clip-auth:  # clips only for a logged-in Navidrome user: Navidrome checks the app's token (401 without)
+      forwardAuth:
+        address: "http://navidrome:4533/api/keepalive/keepalive"
+        authRequestHeaders: ["X-ND-Authorization"]
+    navidrome-clip-strip:
+      stripPrefix:
+        prefixes: ["/rest/x-clip"]
+    radio-relay-limit:    # each listener starts an ffmpeg process: at most 3 streams per IP at once
+      inFlightReq:
+        amount: 3
 
   routers:
-    # Pangolin dashboard: Tailscale only for now (make it public when friends need to log in)
+    # Pangolin dashboard and its login page: Tailscale only (internet: 403)
     next-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && !PathPrefix(`/api/v1`)"
       service: next-service
       entryPoints: [websecure]
-      middlewares: [tailscale-only, badger]
+      middlewares: [error-pages, tailscale-only, badger]
       tls:
         certResolver: letsencrypt
         domains:
           - main: "yourdomain.dedyn.io"
             sans: ["*.yourdomain.dedyn.io"]
+    # The only dashboard pages the internet needs: the resource login (Pocket ID) and its files
+    next-public-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && (PathPrefix(`/auth/resource/`) || PathPrefix(`/auth/idp/`) || PathPrefix(`/_next/`) || Path(`/favicon.ico`))"
+      priority: 500
+      service: next-service
+      entryPoints: [websecure]
+      middlewares: [badger]
+      tls:
+        certResolver: letsencrypt
+    # Email + password login (the server admin account) only over Tailscale.
+    # Pocket ID logins use /api/v1/auth/idp/... and stay reachable from the internet.
+    password-login-router:
+      rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && PathPrefix(`/api/v1/auth/login`)"
+      priority: 1000
+      service: api-service
+      entryPoints: [websecure]
+      middlewares: [tailscale-only, badger]
+      tls:
+        certResolver: letsencrypt
     api-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`) && PathPrefix(`/api/v1`)"
       service: api-service
       entryPoints: [websecure]
-      middlewares: [tailscale-only, badger]
+      middlewares: [badger]
       tls:
         certResolver: letsencrypt
     ws-router:
       rule: "Host(`oracle-pangolin.yourdomain.dedyn.io`)"
       service: api-service
       entryPoints: [websecure]
-      middlewares: [tailscale-only, badger]
+      middlewares: [badger]
       tls:
         certResolver: letsencrypt
 
-    # Pocket ID: routed here, not as a Pangolin resource, so the login provider never depends on the gate it feeds
+    # Pocket ID (public, passkey login): routed here, not as a Pangolin resource, so the login provider never depends on the gate it feeds
     pocket-id:
       rule: "Host(`oracle-pocketid.yourdomain.dedyn.io`)"
       service: pocket-id
       entryPoints: [websecure]
-      middlewares: [tailscale-or-docker]
       tls:
         certResolver: letsencrypt
+
+    # Navidrome Subsonic API (/rest): already open past Pocket ID by a Pangolin rule; this router only adds the rate limit
+    navidrome-rest:
+      rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest`)"
+      priority: 1000
+      service: navidrome
+      entryPoints: [websecure]
+      middlewares: [navidrome-rest-ratelimit]
+      tls:
+        certResolver: letsencrypt
+    # Per-song background clips for the Psysonic / BitChord forks: /rest/x-clip/<folder>/<file> -> navidrome-clips
+    navidrome-clips:
+      rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest/x-clip/`)"
+      priority: 1100
+      service: navidrome-clips
+      entryPoints: [websecure]
+      middlewares: [navidrome-rest-ratelimit, navidrome-clip-auth, navidrome-clip-strip]
+      tls:
+        certResolver: letsencrypt
+    # Navidrome radios that only exist as HLS (Kuwait FM): this VM's own radio-relay re-streams them as MP3.
+    # Same name as at home, so the radio URL in Navidrome works on both servers (home devices use the home relay).
+    radio-relay:
+      rule: "Host(`radio.yourdomain.dedyn.io`)"
+      service: radio-relay
+      entryPoints: [websecure]
+      middlewares: [radio-relay-limit]
+      tls:
+        certResolver: letsencrypt
+    # AudioMuse-AI web UI (no login of its own): trusted only (Tailscale or home), everyone else a styled 403
+    audiomuse:
+      rule: "Host(`oracle-audiomuse.yourdomain.dedyn.io`)"
+      service: audiomuse
+      entryPoints: [websecure]
+      middlewares: [error-pages, tailscale-only]
+      tls:
+        certResolver: letsencrypt
+    # Tailscale-only apps (Tailscale or home): from anywhere else a styled 403 instead of Pangolin's plain "Unauthorized"
+    tailscale-only-apps-public:
+      rule: "(Host(`oracle-uptimekuma.yourdomain.dedyn.io`) || Host(`oracle-crowdsec.yourdomain.dedyn.io`) || Host(`oracle-backrest.yourdomain.dedyn.io`)) && !ClientIP(`100.64.0.0/10`) && !ClientIP(`<HOME-IP>/32`)"
+      priority: 10000
+      service: error-pages
+      entryPoints: [websecure]
+      middlewares: [show-403]
+      tls:
+        certResolver: letsencrypt
+
+    # Pocket ID admin (pages + admin-only API, from the v2.19.1 routes): Tailscale only. Login, passkeys, "My account" and OIDC stay public.
+    pocket-id-admin-public:
+      rule: 'Host(`oracle-pocketid.yourdomain.dedyn.io`) && !ClientIP(`100.64.0.0/10`) && !ClientIP(`<HOME-IP>/32`) && (PathPrefix(`/settings/admin`) || PathPrefix(`/api/application-configuration/`) || (Path(`/api/application-configuration`) && !Method(`GET`)) || (PathPrefix(`/api/application-images/`) && !Method(`GET`)) || PathPrefix(`/api/custom-claims`) || PathPrefix(`/api/user-groups`) || PathPrefix(`/api/signup-tokens`) || PathPrefix(`/api/apis`) || PathPrefix(`/api/api-access`) || PathPrefix(`/api/scim/`) || PathPrefix(`/api/oidc/logo-presets`) || PathPrefix(`/api/audit-logs/all`) || PathPrefix(`/api/audit-logs/filters/`) || (PathRegexp(`^/api/oidc/clients(/|$)`) && !(Method(`GET`) && PathRegexp(`^/api/oidc/clients/[^/]+/logo$`))) || (PathRegexp(`^/api/oidc/users/[^/]+/`) && !PathPrefix(`/api/oidc/users/me/`)) || Path(`/api/users`) || (PathRegexp(`^/api/users/[^/]+`) && !PathPrefix(`/api/users/me`) && !(Method(`GET`) && PathRegexp(`^/api/users/[^/]+/profile-picture\.png$`))))'
+      priority: 10000
+      service: error-pages
+      entryPoints: [websecure]
+      middlewares: [show-403]
+      tls:
+        certResolver: letsencrypt
+
+    # Any other name under the domain (no Pangolin resource): a styled 404 instead of Traefik's plain text
+    unknown-host:
+      rule: "HostRegexp(`.+`)"
+      priority: 1
+      service: error-pages
+      entryPoints: [websecure]
+      tls: {}
 
   services:
     next-service:
@@ -57,3 +164,18 @@ http:
     pocket-id:
       loadBalancer:
         servers: [{url: "http://pocket-id:1411"}]
+    navidrome:
+      loadBalancer:
+        servers: [{url: "http://navidrome:4533"}]
+    navidrome-clips:
+      loadBalancer:
+        servers: [{url: "http://navidrome-clips:8080"}]
+    radio-relay:
+      loadBalancer:
+        servers: [{url: "http://radio-relay:8080"}]
+    audiomuse:
+      loadBalancer:
+        servers: [{url: "http://audiomuse-flask:8000"}]
+    error-pages:
+      loadBalancer:
+        servers: [{url: "http://error-pages:8080"}]

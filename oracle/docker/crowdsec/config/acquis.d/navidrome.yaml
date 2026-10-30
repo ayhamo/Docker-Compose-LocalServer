@@ -1,0 +1,5 @@
+# Navidrome's log file (ND_LOGFILE), for homelab/navidrome-bf
+filenames:
+  - /var/log/navidrome/navidrome.log
+labels:
+  type: navidrome

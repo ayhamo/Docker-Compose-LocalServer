@@ -2,7 +2,7 @@
 # No Gerbil/Newt tunnels: home is reached over Tailscale, and Pangolin's VPN would clash with Tailscale's 100.64.0.0/10.
 services:
   pangolin:
-    image: docker.io/fosrl/pangolin:1.25.3
+    image: docker.io/fosrl/pangolin:latest
     container_name: pangolin
     restart: unless-stopped
     volumes:
@@ -26,6 +26,11 @@ services:
         condition: service_healthy
     command:
       - --configFile=/etc/traefik/traefik_config.yml
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     env_file: .env                  # DESEC_TOKEN (wildcard cert via DNS-01)
     environment:
       DESEC_PROPAGATION_TIMEOUT: "600"
@@ -45,7 +50,25 @@ services:
         aliases:
           # public DNS sends this name home; Pangolin's login calls reach Pocket ID through Traefik here
           - oracle-pocketid.yourdomain.dedyn.io
-      proxy-net: {}                 # reaches the apps by container name
+      proxy-net:                    # reaches the apps by container name
+        ipv4_address: 172.18.255.250   # fixed: Navidrome trusts only this address (ND_EXTAUTH_TRUSTEDSOURCES)
+
+  error-pages:
+    # Styled error pages (same as home NPM): Traefik shows them for blocked dashboard pages and unknown names
+    image: ghcr.io/tarampampam/error-pages:4
+    container_name: error-pages
+    restart: unless-stopped
+    environment:
+      ROTATION_MODE: random-on-each-request
+      SHOW_DETAILS: "false"          # no request details for strangers
+      SEND_SAME_HTTP_CODE: "true"    # a 404 page is sent with status 404
+    # Hardening: no privilege escalation, no Linux capabilities
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - default
 
 networks:
   default:

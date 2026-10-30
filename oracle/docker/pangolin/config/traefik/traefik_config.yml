@@ -9,6 +9,7 @@ experimental:
     badger:
       moduleName: "github.com/fosrl/badger"
       version: "v1.7.0"   # v1.8.0 fails Traefik's plugin integrity check (2026-10-27)
+ping: {}                          # /ping on the internal :8080 entrypoint, used by the container healthcheck
 log:
   level: "INFO"
 accessLog:
@@ -35,6 +36,7 @@ entryPoints:
       respondingTimeouts:
         readTimeout: "30m"
     http:
+      middlewares: [strip-proxy-auth@file]   # removes login headers from every request (Navidrome trusts proxy-net)
       encodedCharacters:
         allowEncodedSlash: true
         allowEncodedQuestionMark: true

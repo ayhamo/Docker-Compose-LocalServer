@@ -35,10 +35,13 @@ class Relay(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         self.send_header("icy-name", name)
         self.end_headers()
+        # A listener that vanished without closing (no FIN/RST) would block the write for ~15 min
+        # and keep its ffmpeg running; give up after 30 s of no progress instead.
+        self.connection.settimeout(30)
         try:
             while chunk := ffmpeg.stdout.read(8192):
                 self.wfile.write(chunk)
-        except (BrokenPipeError, ConnectionResetError):
+        except OSError:   # BrokenPipe, ConnectionReset, timeout
             pass
         finally:
             ffmpeg.kill()

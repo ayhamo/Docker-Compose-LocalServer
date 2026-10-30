@@ -15,6 +15,7 @@ services:
       - ./data:/var/lib/crowdsec/data
       - ./acquis.yaml:/etc/crowdsec/acquis.d/traefik.yaml:ro
       - ../pangolin/config/traefik/logs:/var/log/traefik:ro
+      - ../navidrome/navidrome-data/logs:/var/log/navidrome:ro   # Navidrome's log (failed logins, real client IPs)
     # Hardening: no privilege escalation
     security_opt:
       - no-new-privileges:true
@@ -24,3 +25,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  crowdsec-web-ui:
+    # Dashboard for CrowdSec: alerts, bans (decisions), metrics. Own login; logs in to CrowdSec as machine "crowdsec-web-ui".
+    image: ghcr.io/theduffman85/crowdsec-web-ui:latest
+    container_name: crowdsec-web-ui
+    restart: unless-stopped
+    env_file: .env                    # CONFIG_INSTANCE_LAPI_AUTH_PASSWORD (600)
+    environment:
+      CONFIG_INSTANCE_LAPI_URL: http://crowdsec:8080
+      CONFIG_INSTANCE_LAPI_AUTH_USERNAME: crowdsec-web-ui
+      CONFIG_INSTANCE_METRICS_URL: http://crowdsec:6060/metrics   # CrowdSec Prometheus metrics (level full), for the Metrics page
+      TZ: Europe/Berlin
+    volumes:
+      - ./web-ui-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - default
+      - proxy-net                     # Traefik (Pangolin) reaches it as crowdsec-web-ui:3000 (no published port: Pangolin only)
+    depends_on:
+      - crowdsec
+
+networks:
+  proxy-net:
+    external: true

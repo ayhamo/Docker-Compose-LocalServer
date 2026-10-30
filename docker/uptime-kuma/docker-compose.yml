@@ -14,6 +14,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    extra_hosts:
+      # the router answers public DNS (the Oracle VM) for *.yourdomain; this monitor must hit home NPM
+      - "nextcloud.yourdomain.dedyn.io:192.168.0.214"
     networks:
       - proxy-net
 
