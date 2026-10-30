@@ -10,7 +10,7 @@ services:
       - ND_LOGLEVEL=info
       - ND_PLUGINS_ENABLED=true
       - ND_PLUGINS_AUTORELOAD=true
-      - ND_LYRICSPRIORITY=.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded,nd-lyrics,navidrome-musixmatch-plugin,navidrome-shazam-plugin,navidrome-lyricstranslate-plugin
+      - ND_LYRICSPRIORITY=.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded,nd-lyrics,navidrome-musixmatch-plugin,navidrome-lyricstranslate-plugin
       - ND_AGENTS=audiomuseai,apple-music,lastfm,deezer
       - "ND_PID_ALBUM=folder"
       - ND_LASTFM_APIKEY=${LASTFM_APIKEY}
