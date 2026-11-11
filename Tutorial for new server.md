@@ -242,17 +242,20 @@ Every app is started with `cd /opt/docker/<app> && docker compose up -d`. Order 
 
 ## 6. Scheduled jobs
 
-Both scripts run as your user (who is in the `docker` group) and finish before Backrest's nightly backup at 03:15, so the backup always holds a fresh Sure dump. Add them with `crontab -e`:
+These scripts run as your user (who is in the `docker` group). The first two finish before Backrest's nightly backup at 03:15, so the backup always holds a fresh Sure dump. Add them with `crontab -e`:
 
 ```cron
 # AdGuard: load the renewed cert (if NPM renewed it)
 30 2 * * * /opt/docker/adguardhome/cert-reload.sh >> /opt/docker/adguardhome/cert-reload.log 2>&1
 # Sure database dump before Backrest (03:15)
 50 2 * * * /opt/docker/sure/backup-db.sh >> /opt/docker/sure/backups/backup-db.log 2>&1
+# radio-relay is built locally, so nothing updates it: test it weekly, rebuild it on the first Monday of the month
+# (rolls back if the new build fails). The argument is an Uptime Kuma push URL; give the monitor an 8-day interval.
+15 5 * * 1 /opt/docker/navidrome/radio-relay-rebuild.sh "https://uptimekuma.yourdomain.dedyn.io/api/push/<TOKEN>" >> /opt/docker/navidrome/radio-relay-rebuild.log 2>&1
 ```
 
 ```bash
-chmod +x /opt/docker/adguardhome/cert-reload.sh /opt/docker/sure/backup-db.sh
+chmod +x /opt/docker/adguardhome/cert-reload.sh /opt/docker/sure/backup-db.sh /opt/docker/navidrome/radio-relay-rebuild.sh
 mkdir -p /opt/docker/sure/backups
 ```
 
