@@ -8,6 +8,7 @@ services:
     #   - "4533:4533"
     environment:
       - ND_LOGLEVEL=info
+      - ND_IMAGECACHESIZE=1GB                     # covers: default 100MB was full (3000 px Atmos covers)
       - ND_PLUGINS_ENABLED=true
       - ND_PLUGINS_AUTORELOAD=true
       - ND_LYRICSPRIORITY=.ttml,.yaml,.yml,.elrc,.lrc,.srt,.txt,embedded,nd-lyrics,navidrome-musixmatch-plugin,navidrome-lyricstranslate-plugin
@@ -118,6 +119,8 @@ services:
     build: ./radio-relay
     image: radio-relay:local
     container_name: radio-relay
+    labels:
+      - dockhand.update=false                     # built here (radio-relay:local): no registry to check, Dockhand got 401
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/health"]

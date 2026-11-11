@@ -23,7 +23,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 - **Host-network apps.** AdGuard Home and GPTWOL use `network_mode: host` because they need raw DNS/ARP/WoL access. NPM reaches them by the server's LAN IP rather than a container name.
 - **Tailscale clients keep their real IP in NPM.** Tailscale masquerades everything it forwards, and since its 28 Oct 2026 update its rules run before Docker's, so NPM saw every Tailscale client (the Oracle VM too) as the `proxy-net` gateway and the VM's per-IP limit in `http_top.conf` stopped matching. [`scripts/tailscale-docker-realip.service`](docker/scripts/tailscale-docker-realip.service) (in `/etc/systemd/system`, enabled) clears Tailscale's mark on packets going into Docker bridges at every boot, so those skip the masquerade whatever the rule order; exit-node and LAN-route traffic keep it.
 - **Hardened containers.** Where an image allows it, services run with `no-new-privileges` and `cap_drop: ALL`, adding back only the capabilities they need (each block is commented in its compose). Uptime Kuma has no Docker socket mount.
-- **Scheduled jobs.** Two host cron entries run before the nightly Backrest backup (03:15): `adguardhome/cert-reload.sh` at 02:30 and `sure/backup-db.sh` (a `pg_dump` of Sure, 7 days kept) at 02:50. See the tutorial, step 6.
+- **Scheduled jobs.** Three host cron entries run before the nightly Backrest backup (03:15): `adguardhome/cert-reload.sh` at 02:30, `sure/backup-db.sh` (a `pg_dump` of Sure, 7 days kept) at 02:50 and `wardrowbe/backup-db.sh` (the same for Wardrowbe; its Uptime Kuma push URL is passed in the cron line) at 02:55. See the tutorial, step 6.
 - **Global log rotation.** Logs are rotated for every container via `/etc/docker/daemon.json` (`local` driver, 2 × 2 MB).
 - **No secrets in this repo.** Compose files only reference `${VAR}`; the values live in each stack's `.env` (mode 600, git-ignored), and Immich Drop's in its own `immich-drop.env` (Immich's `.env` is loaded into every Immich container). Copy `.env.example` → `.env` and fill it in. A few config files keep `<REDACTED_…>` placeholders.
 - **Home Navidrome is a backup, home and Tailscale only.** The Oracle VM's Navidrome is the main one. Home Navidrome is not on the Oracle gateway (removed 2026-10-29), so it needs no proxy trust, header login or log shipping.
@@ -43,6 +43,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 | [Sure](https://github.com/we-promise/sure) | `sure` | Personal finance, behind the [Pipelock](https://github.com/luckyPipewrench/pipelock) egress proxy; `overrides/` holds a small Yahoo Finance fix mounted as an initializer | `sure-web:3000` |
 | [SparkyFitness](https://github.com/CodeWithCJ/SparkyFitness) | `sparky-fitness` | Fitness and nutrition tracker | `sparkyfitness-frontend:80` |
 | [Floppy](https://github.com/dannyvfilms/floppy) | `floppy` | Media tracker; custom AniList/SIMKL importers are mounted in | `floppy:8000` |
+| [Wardrowbe](https://github.com/Anyesh/wardrowbe) | `wardrowbe` | Wardrobe photos with AI tagging (OpenRouter) and daily outfit suggestions; LAN/Tailscale only, NPM signs you in directly (forward-auth headers from `nginx-proxy-manager/data/nginx/custom/wardrowbe-auth.conf`) | `wardrobe-frontend:3000` |
 | [Dynacat](https://github.com/panonim/dynacat) | `dynacat` | Dashboard / start page | `dynacat:8080` |
 | [Last Glance](https://github.com/krelltunez/lastglance) | `lastglance` | "When did I last…" tracker | `lastglance:80` |
 | [BentoPDF](https://github.com/alam00000/bentopdf) | `bentopdf` | Client-side PDF toolkit | `bentopdf:8080` |
@@ -74,6 +75,7 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | 02:37 | Floppy database snapshot, 7 kept (`floppy/backups/database/`) | Floppy |
 | 02:40 (01:40) | Immich database dump, 7 kept (`immich/library/backups/`) | Immich (UTC) |
 | 02:50 | Sure database dump, 7 days kept (`sure/backup-db.sh`) | user crontab |
+| 02:55 | Wardrowbe database dump, 7 days kept (`wardrowbe/backup-db.sh`) | user crontab |
 | 03:15 | Backrest backup of `/opt/docker` (7 daily, 4 weekly, 6 monthly) | Backrest |
 | 04:00 | rclone: Backrest repository → Google Drive | root crontab |
 | 04:20 (03:20) | Nextcloud AIO backup to `/mnt/hdd/nextcloud-backup` | Nextcloud AIO (UTC) |

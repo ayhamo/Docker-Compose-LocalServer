@@ -26,13 +26,11 @@ http:
         average: 10
         period: 1s
         burst: 50
-    navidrome-clip-auth:  # clips only for a logged-in Navidrome user: Navidrome checks the app's token (401 without)
-      forwardAuth:
-        address: "http://navidrome:4533/api/keepalive/keepalive"
-        authRequestHeaders: ["X-ND-Authorization"]
-    navidrome-clip-strip:
-      stripPrefix:
-        prefixes: ["/rest/x-clip"]
+    navidrome-cover-ratelimit:
+      rateLimit:          # cover art only: a page of albums or a client sync asks for many covers at once
+        average: 50
+        period: 1s
+        burst: 300
     radio-relay-limit:    # each listener starts an ffmpeg process: at most 3 streams per IP at once
       inFlightReq:
         amount: 3
@@ -100,13 +98,13 @@ http:
       middlewares: [navidrome-rest-ratelimit]
       tls:
         certResolver: letsencrypt
-    # Per-song background clips for the Psysonic / BitChord forks: /rest/x-clip/<folder>/<file> -> navidrome-clips
-    navidrome-clips:
-      rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest/x-clip/`)"
+    # Navidrome cover art: same as navidrome-rest, but a looser limit so album grids don't stay blurred
+    navidrome-cover:
+      rule: "Host(`oracle-navidrome.yourdomain.dedyn.io`) && PathPrefix(`/rest/getCoverArt`)"
       priority: 1100
-      service: navidrome-clips
+      service: navidrome
       entryPoints: [websecure]
-      middlewares: [navidrome-rest-ratelimit, navidrome-clip-auth, navidrome-clip-strip]
+      middlewares: [navidrome-cover-ratelimit]
       tls:
         certResolver: letsencrypt
     # Navidrome radios that only exist as HLS (Kuwait FM): this VM's own radio-relay re-streams them as MP3.
@@ -167,9 +165,6 @@ http:
     navidrome:
       loadBalancer:
         servers: [{url: "http://navidrome:4533"}]
-    navidrome-clips:
-      loadBalancer:
-        servers: [{url: "http://navidrome-clips:8080"}]
     radio-relay:
       loadBalancer:
         servers: [{url: "http://radio-relay:8080"}]

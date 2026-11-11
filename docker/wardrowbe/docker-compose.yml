@@ -1,0 +1,182 @@
+# Wardrowbe: wardrobe photos, AI tagging and daily outfit suggestions (https://github.com/Anyesh/wardrowbe)
+# Based on the upstream docker-compose.yml. Only the frontend joins proxy-net (NPM -> wardrobe-frontend:3000);
+# it forwards /api/v1 to the backend itself, so the backend, workers, Postgres and Redis publish no ports.
+# Data lives in bind mounts next to this file, so the nightly Backrest backup covers it.
+x-backend-env: &backend-env
+  DEBUG: ${DEBUG:-false}
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-wardrobe}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-wardrobe}
+  REDIS_URL: redis://redis:6379/0
+  SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+  STORAGE_PATH: /data/wardrobe
+  APP_URL: ${APP_URL:-}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  AI_BASE_URL: ${AI_BASE_URL:-}
+  AI_API_KEY: ${AI_API_KEY:-}
+  AI_VISION_MODEL: ${AI_VISION_MODEL:-}       # one model: a comma list is sent as one name
+  AI_TEXT_MODEL: ${AI_TEXT_MODEL:-}
+  AI_TIMEOUT: ${AI_TIMEOUT:-}
+  AI_MAX_RETRIES: ${AI_MAX_RETRIES:-3}
+  AI_TAGGING_CONCURRENCY: ${AI_TAGGING_CONCURRENCY:-1}
+  AI_RETRY_COOLDOWN_SECONDS: ${AI_RETRY_COOLDOWN_SECONDS:-}
+  AI_INTERNAL_ENABLED: ${AI_INTERNAL_ENABLED:-true}
+  AI_REASONING_EFFORT: ${AI_REASONING_EFFORT:-none}
+  NTFY_SERVER: ${NTFY_SERVER:-}
+  NTFY_TOKEN: ${NTFY_TOKEN:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_USE_TLS: ${SMTP_USE_TLS:-}
+  SMTP_FROM_NAME: ${SMTP_FROM_NAME:-}
+  SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: wardrobe-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-wardrobe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-wardrobe}
+    volumes:
+      - ./postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-wardrobe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wardrobe-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: wardrobe-redis
+    restart: unless-stopped
+    volumes:
+      - ./redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - wardrobe-net
+
+  backend:
+    image: ghcr.io/anyesh/wardrowbe:backend-latest
+    container_name: wardrobe-backend
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      FORWARD_AUTH_SECRET: ${FORWARD_AUTH_SECRET:-}
+      # NPM appends X-Forwarded-For; the frontend only relays it (README: Client IPs behind a reverse proxy)
+      TRUSTED_PROXY_COUNT: ${TRUSTED_PROXY_COUNT:-1}
+    volumes:
+      - ./data:/data/wardrobe
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - wardrobe-net
+
+  # AI tagging, suggestions and notifications
+  worker:
+    image: ghcr.io/anyesh/wardrowbe:backend-latest
+    container_name: wardrobe-worker
+    restart: unless-stopped
+    command: arq app.workers.worker.WorkerSettings
+    environment:
+      <<: *backend-env
+    volumes:
+      - ./data:/data/wardrobe
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:                                  # arq writes a health key to Redis every 30 s; --check reads it
+      test: ["CMD", "arq", "--check", "app.workers.worker.WorkerSettings"]
+      interval: 1m
+      timeout: 15s
+      retries: 3
+      start_period: 1m
+    networks:
+      - wardrobe-net
+
+  # Local image work (rotation, background removal with rembg) on its own queue
+  image-worker:
+    image: ghcr.io/anyesh/wardrowbe:backend-latest
+    container_name: wardrobe-image-worker
+    restart: unless-stopped
+    command: arq app.workers.image_worker.ImageWorkerSettings
+    environment:
+      <<: *backend-env
+      IMAGE_WORKER_CONCURRENCY: ${IMAGE_WORKER_CONCURRENCY:-1}
+      BG_REMOVAL_PROVIDER: ${BG_REMOVAL_PROVIDER:-rembg}
+      BG_REMOVAL_MODEL: ${BG_REMOVAL_MODEL:-u2net}
+    volumes:
+      - ./data:/data/wardrobe
+      - ./rembg-models:/opt/rembg/models
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:                                  # same check for its own queue (arq:images)
+      test: ["CMD", "arq", "--check", "app.workers.image_worker.ImageWorkerSettings"]
+      interval: 1m
+      timeout: 15s
+      retries: 3
+      start_period: 1m
+    networks:
+      - wardrobe-net
+
+  frontend:
+    image: ghcr.io/anyesh/wardrowbe:frontend-latest
+    container_name: wardrobe-frontend
+    restart: unless-stopped
+    # use Nginx Proxy Manager
+    # ports:
+    #   - "3000:3000"
+    environment:
+      BACKEND_URL: http://backend:8000
+      NEXTAUTH_URL: ${NEXTAUTH_URL:?Set NEXTAUTH_URL in .env}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?Set NEXTAUTH_SECRET in .env}
+      DEV_MODE: ${DEBUG:-false}       # keep false: login comes from NPM (forward-auth)
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_END_SESSION_URL: ${OIDC_END_SESSION_URL:-}
+      FORWARD_AUTH_SECRET: ${FORWARD_AUTH_SECRET:-}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - wardrobe-net
+      # Joined external proxy network so NPM can talk to wardrobe-frontend:3000
+      - proxy-net
+
+networks:
+  wardrobe-net:
+    driver: bridge
+  proxy-net:
+    external: true
