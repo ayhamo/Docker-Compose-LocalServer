@@ -76,6 +76,7 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | 02:40 (01:40) | Immich database dump, 7 kept (`immich/library/backups/`) | Immich (UTC) |
 | 02:50 | Sure database dump, 7 days kept (`sure/backup-db.sh`) | user crontab |
 | 02:55 | Wardrowbe database dump, 7 days kept (`wardrowbe/backup-db.sh`) | user crontab |
+| 03:05 | Host config copy: all of `/etc` (no password hashes), every crontab, `/usr/local` scripts, public SSH keys, package lists and a system summary into `/opt/docker/host-config` (root only), so Backrest backs up the host's setup too; pushes to the Kuma monitor "Host config copy" ([`scripts/host-config-backup.sh`](docker/scripts/host-config-backup.sh), installed in `/usr/local/sbin`) | root crontab |
 | 03:15 | Backrest backup of `/opt/docker` (7 daily, 4 weekly, 6 monthly) | Backrest |
 | 04:00 | rclone: Backrest repository → Google Drive | root crontab |
 | 04:20 (03:20) | Nextcloud AIO backup to `/mnt/hdd/nextcloud-backup` | Nextcloud AIO (UTC) |

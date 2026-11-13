@@ -137,7 +137,7 @@ The home Dockhand manages this VM through [Hawser](docker/hawser/) in standard m
 
 ## Scheduled jobs (Oracle VM)
 
-All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, database copies 03:00, backup 03:15, upload 04:00. OS updates install only after the backup and upload, and a reboot comes last. Unlike the home server, OS updates install themselves, because nobody logs in here every week. Rows marked *planned* are added as services move in.
+All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, database copies 03:00, backup 03:15, upload 04:00. OS updates install only after the backup and upload. Unlike the home server, OS updates install themselves, because nobody logs in here every week, but the VM never reboots by itself: a Discord alert says when a reboot is due, and I run `sudo reboot`. Rows marked *planned* are added as services move in.
 
 | When | Job | Runs from |
 |---|---|---|
@@ -146,10 +146,11 @@ All times Europe/Berlin, read from the VM's timers and crontab. The slots match 
 | Mon 01:00 | Docker cleanup: images and build cache unused for 7 days (same slot as Dockhand's prune at home) | user crontab |
 | 02:00 | apt: download package lists | systemd `apt-daily.timer` |
 | 03:00 | Database copies: consistent `.snapshot` copies of the 6 SQLite databases (Pocket ID, Pangolin, Kuma, Navidrome, CrowdSec, CrowdSec Web UI `state.db`) through SQLite's online backup, no container stop ([`host/oracle-db-snapshots.py`](host/oracle-db-snapshots.py)) | root crontab |
+| 03:05 | Host config copy into `/opt/docker/host-config`, same script as home ([`host-config-backup.sh`](../docker/scripts/host-config-backup.sh), in `/usr/local/sbin`); pushes to Oracle's Kuma monitor "Host config copy" | root crontab |
 | 03:15 | Backrest: backup of `/opt/docker` (music, caches and Traefik's access logs excluded: Subsonic apps put the login token in the URL); keeps 7 daily, 4 weekly, 6 monthly; prune and check on the 1st at 00:00 ([`docker/backrest`](docker/backrest/)) | Backrest |
 | 04:00 | Upload of the Backrest repo to Google Drive (`System & Backups/Local Server Backup/oracle-backup (Backrest)`), only if tonight's database copies and backup exist ([`host/oracle-gdrive-upload.sh`](host/oracle-gdrive-upload.sh)); pushes up to Oracle's Kuma monitor "Oracle Backup → GDrive", or down with the reason (also logged) when it skips | root crontab |
 | 04:15 | Unattended upgrades: Ubuntu security and regular updates; old kernels and unused packages removed | systemd `apt-daily-upgrade.timer` |
-| 04:45 | Reboot, only if an update requires it | unattended-upgrades |
+| 05:00, and 90 s after boot | Reboot check: if an update needs a reboot (`/var/run/reboot-required`), pushes down to Oracle's Kuma monitor "Oracle reboot needed" with the packages, so Discord gets the alert; otherwise up ([`host/reboot-needed.sh`](host/reboot-needed.sh), copied to `/opt/docker`). No automatic reboot | user crontab |
 | Mon 05:15 | radio-relay: weekly test, monthly rebuild with rollback, as on the home server ([`radio-relay-rebuild.sh`](../docker/navidrome/radio-relay-rebuild.sh), copied to `/opt/docker/navidrome`); pushes to Oracle's Kuma monitor "Radio relay check" | user crontab |
 | Mon 01:10 | GeoIP: refresh the DE and KW country lists and re-apply the 80/443 rule | systemd `geoip-allow-update.timer` |
 | Every 5 min | Home IP trust: home's internet IP (`yourdomain.dedyn.io`, no subdomain) counts like Tailscale, so admin pages open from home and Pangolin lets home through without its login. When the IP changes, the old `/32` is swapped for the new one in Traefik's rules, Pangolin's resource rules and CrowdSec's `homelab` allowlist ([`host/home-ip-trust.py`](host/home-ip-trust.py)) | root crontab |
@@ -170,17 +171,23 @@ X11Forwarding no
 AllowUsers ubuntu
 ```
 
+`/etc/sysctl.d/90-bbr.conf` (plus `tcp_bbr` in `/etc/modules-load.d/bbr.conf`). Only the VM sends with BBR: it serves the phone over mobile data, where BBR held 230–250 Mbit/s against CUBIC's 7 Mbit/s with 1 % loss (36–71 Mbit/s with 0.1 %), but ran about 10 % slower on a clean path. The home server stays on CUBIC: its upload (about 51 Mbit/s) was the same with both, and BBR added about 8 ms of delay. Containers pick the setting up when they start, so Pangolin and Traefik were restarted after the change.
+```
+# Homelab: BBR instead of CUBIC (benchmarked 2026-11-13, Oracle -> home over Tailscale: about 10% slower at 250 Mbit/s
+# on a clean path, 3-7x faster with 0.1% loss and 35x with 1% loss, as on mobile data). Queue stays fq_codel (10-bufferbloat.conf).
+net.ipv4.tcp_congestion_control = bbr
+```
+
 `/etc/apt/apt.conf.d/52homelab-unattended`
 ```
 // Homelab: also install normal Ubuntu updates automatically (not only security),
-// remove unused kernels/deps, and reboot at 04:45 when an update needs it.
+// remove unused kernels/deps. Never reboot by itself: /opt/docker/reboot-needed.sh tells Uptime Kuma (Discord) when a reboot is due.
 Unattended-Upgrade::Allowed-Origins {
         "${distro_id}:${distro_codename}-updates";
 };
 Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
-Unattended-Upgrade::Automatic-Reboot "true";
-Unattended-Upgrade::Automatic-Reboot-Time "04:45";
+Unattended-Upgrade::Automatic-Reboot "false";
 ```
 
 `/etc/systemd/system/apt-daily.timer.d/override.conf` (and the same for `apt-daily-upgrade.timer` with `04:15`)

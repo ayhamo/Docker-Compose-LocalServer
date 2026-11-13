@@ -259,6 +259,20 @@ chmod +x /opt/docker/adguardhome/cert-reload.sh /opt/docker/sure/backup-db.sh /o
 mkdir -p /opt/docker/sure/backups
 ```
 
+The host's own setup (all of `/etc`, every crontab, `/usr/local` scripts, public SSH keys, package lists) lives outside `/opt/docker`, so a root job copies it into `/opt/docker/host-config` just before Backrest. Password hashes and private keys are left out. Install the script and add it to root's crontab (`sudo crontab -e`); give its Uptime Kuma push monitor a 25-hour interval:
+
+```bash
+sudo install -m 700 /opt/docker/scripts/host-config-backup.sh /usr/local/sbin/host-config-backup.sh
+sudo mkdir -p /var/log/cron-logs
+```
+
+```cron
+# Host config -> /opt/docker/host-config before Backrest (03:15)
+5 3 * * * /usr/local/sbin/host-config-backup.sh "https://uptimekuma.yourdomain.dedyn.io/api/push/<TOKEN>" >> /var/log/cron-logs/host-config-backup.log 2>&1
+```
+
+To rebuild a server from it, restore `/opt/docker/host-config` from Backrest and follow its `README.txt`.
+
 ---
 
 ## 7. Check everything
