@@ -1,0 +1,14 @@
+[Unit]
+# Homelab: Tailscale exit node / subnet router forwards UDP faster with GRO forwarding on
+# (https://tailscale.com/kb/1320/performance-best-practices). Undo: disable this unit and reboot.
+Description=Enable UDP GRO forwarding on enp4s0f1 for Tailscale
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/ethtool -K enp4s0f1 rx-udp-gro-forwarding on rx-gro-list off
+
+[Install]
+WantedBy=multi-user.target

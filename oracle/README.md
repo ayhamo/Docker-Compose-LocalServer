@@ -137,7 +137,7 @@ The home Dockhand manages this VM through [Hawser](docker/hawser/) in standard m
 
 ## Scheduled jobs (Oracle VM)
 
-All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, database copies 03:00, backup 03:15, upload 04:00. OS updates install only after the backup and upload. Unlike the home server, OS updates install themselves, because nobody logs in here every week, but the VM never reboots by itself: a Discord alert says when a reboot is due, and I run `sudo reboot`. Rows marked *planned* are added as services move in.
+All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, database copies 03:00, backup 03:15, upload 04:00. OS updates install only after the backup and upload. All OS updates install themselves (the home server installs only security updates by itself), because nobody logs in here every week, but the VM never reboots by itself: a Discord alert says when a reboot is due, and I run `sudo reboot`. Rows marked *planned* are added as services move in.
 
 | When | Job | Runs from |
 |---|---|---|
@@ -171,7 +171,7 @@ X11Forwarding no
 AllowUsers ubuntu
 ```
 
-`/etc/sysctl.d/90-bbr.conf` (plus `tcp_bbr` in `/etc/modules-load.d/bbr.conf`). Only the VM sends with BBR: it serves the phone over mobile data, where BBR held 230–250 Mbit/s against CUBIC's 7 Mbit/s with 1 % loss (36–71 Mbit/s with 0.1 %), but ran about 10 % slower on a clean path. The home server stays on CUBIC: its upload (about 51 Mbit/s) was the same with both, and BBR added about 8 ms of delay. Containers pick the setting up when they start, so Pangolin and Traefik were restarted after the change.
+`/etc/sysctl.d/90-bbr.conf` (plus `tcp_bbr` in `/etc/modules-load.d/bbr.conf`). The VM serves the phone over mobile data, where BBR held 230–250 Mbit/s against CUBIC's 7 Mbit/s with 1 % loss (36–71 Mbit/s with 0.1 %), but ran about 10 % slower on a clean path. The home server uses BBR too since 2026-11-17: on a clean line its upload (about 51 Mbit/s) was the same with both, but a test with 100 ms delay and packet loss (as from Kuwait) showed the same gap as here (see the main README). Containers pick the setting up when they start, so Pangolin and Traefik were restarted after the change.
 ```
 # Homelab: BBR instead of CUBIC (benchmarked 2026-11-13, Oracle -> home over Tailscale: about 10% slower at 250 Mbit/s
 # on a clean path, 3-7x faster with 0.1% loss and 35x with 1% loss, as on mobile data). Queue stays fq_codel (10-bufferbloat.conf).

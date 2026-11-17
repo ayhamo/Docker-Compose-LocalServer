@@ -24,6 +24,23 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 - **Tailscale clients keep their real IP in NPM.** Tailscale masquerades everything it forwards, and since its 28 Oct 2026 update its rules run before Docker's, so NPM saw every Tailscale client (the Oracle VM too) as the `proxy-net` gateway and the VM's per-IP limit in `http_top.conf` stopped matching. [`scripts/tailscale-docker-realip.service`](docker/scripts/tailscale-docker-realip.service) (in `/etc/systemd/system`, enabled) clears Tailscale's mark on packets going into Docker bridges at every boot, so those skip the masquerade whatever the rule order; exit-node and LAN-route traffic keep it.
 - **Hardened containers.** Where an image allows it, services run with `no-new-privileges` and `cap_drop: ALL`, adding back only the capabilities they need (each block is commented in its compose). Uptime Kuma has no Docker socket mount.
 - **Scheduled jobs.** Three host cron entries run before the nightly Backrest backup (03:15): `adguardhome/cert-reload.sh` at 02:30, `sure/backup-db.sh` (a `pg_dump` of Sure, 7 days kept) at 02:50 and `wardrowbe/backup-db.sh` (the same for Wardrowbe; its Uptime Kuma push URL is passed in the cron line) at 02:55. See the tutorial, step 6.
+- **Root SSD on btrfs with zstd compression** (since 17 Nov 2026, converted from ext4). The SSD has one subvolume per area: `@` (/), `@home`, `@opt-docker`, `@containerd`, `@docker`, `@log` and `@swap`, all mounted with `compress=zstd:1,noatime`.
+  - **Snapshots:** each area can be snapshotted and restored on its own, so one broken app can be rolled back without touching the rest. The image stores (`@containerd`, `@docker`) are left out of snapshots, because images can be pulled again.
+  - **Space:** the data went from 60 GB to 40 GB.
+  - **Swap:** an 8 GB swapfile in `@swap` (`/swap/swapfile`).
+  - **Setup:** see the tutorial, step 1.0.
+  - **Snapper:** automatic snapshots of `/` (7 daily, 4 weekly, plus one before and after every apt run and one at each boot) and `/opt/docker` (6 hourly, 7 daily, 4 weekly). Backrest excludes `/opt/docker/.snapshots`.
+  - **Boot:** the Acer firmware starts the fallback loader `EFI\BOOT\grubx64.efi`, not `EFI\debian`. Debconf `grub2/force_efi_extra_removable` is set, so every GRUB update refreshes both copies.
+- **Backups off the SSD.** The Backrest (restic) repository lives on the HDD at `/mnt/hdd/backrest-backup`, mounted into the container at `/data/docker-backup` (moved 17 Nov 2026). An SSD failure no longer takes the data and its backup together; Google Drive keeps the off-site copy.
+- **Host tuning** (tutorial step 1.2a), tested 2026-11-17 including a reboot:
+  - **zswap with zstd** in front of the swapfile ([`scripts/zswap.conf`](docker/scripts/zswap.conf) in `/etc/tmpfiles.d`).
+  - **UDP GRO forwarding for Tailscale** ([`scripts/udp-gro-forwarding.service`](docker/scripts/udp-gro-forwarding.service), enabled), because home is an exit node and subnet router.
+  - **Docker `live-restore`:** containers keep running while the Docker daemon restarts.
+  - **TCP BBR** (`/etc/sysctl.d/90-bbr.conf`, `tcp_bbr` in `/etc/modules-load.d/bbr.conf`). Benchmarked 2026-11-17 in containers with a 100 ms round trip and a 50 Mbit/s limit, like the upload to Kuwait: the same speed as CUBIC on a clean path, 47 against 9 Mbit/s with 0.1% packet loss and 46 against 1.6 Mbit/s with 1%.
+  - **`tcp_slow_start_after_idle = 0` and `tcp_notsent_lowat = 16384`** (`/etc/sysctl.d/90-tcp-tuning.conf`): connections keep their speed after a pause, and HTTP/2 can send urgent parts first. A container gets its own copy of these settings, so NPM, which sends every page to remote clients, sets them again under `sysctls:` in its compose file. BBR does carry into containers.
+  - **AdGuard `upstream_mode: parallel`:** asks Cloudflare and Quad9 at once and uses the first answer (uncached lookups 21 ms on average instead of 25, worst case 35 ms instead of 67).
+- **SSD writes, about 21 GB a day** (measured 2026-11-17). The biggest writer was Smart Plug, at 7–70 GB a day, until its SQLite fix (see [its folder](docker/smart-plug/)).
+- **Updates and health alerts.** `unattended-upgrades` installs Debian security updates only and never reboots. [`scripts/reboot-needed.sh`](docker/scripts/reboot-needed.sh) tells the Kuma monitor "Home reboot needed" when a reboot is pending, and [`scripts/disk-health.sh`](docker/scripts/disk-health.sh) reports SMART health of both disks, NVMe wear and btrfs error counters to "Home disk health". Both are in `/usr/local/sbin`.
 - **Global log rotation.** Logs are rotated for every container via `/etc/docker/daemon.json` (`local` driver, 2 × 2 MB).
 - **No secrets in this repo.** Compose files only reference `${VAR}`; the values live in each stack's `.env` (mode 600, git-ignored), and Immich Drop's in its own `immich-drop.env` (Immich's `.env` is loaded into every Immich container). Copy `.env.example` → `.env` and fill it in. A few config files keep `<REDACTED_…>` placeholders.
 - **Home Navidrome is a backup, home and Tailscale only.** The Oracle VM's Navidrome is the main one. Home Navidrome is not on the Oracle gateway (removed 2026-10-29), so it needs no proxy trust, header login or log shipping.
@@ -36,7 +53,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 | [AdGuard Home](https://adguard.com/adguard-home.html) | `adguardhome` | Network-wide DNS ad-blocking; DoT and HTTPS use NPM's cert. Includes [adguardhome-sync](https://github.com/bakito/adguardhome-sync) for the Oracle VM's AdGuard, paused behind the compose profile `oracle-replica` while that AdGuard is off | host network: DNS `53`, DoT `853`, UI `8880` / `8443` |
 | [Dockhand](https://hub.docker.com/r/fnsys/dockhand) | `dockhand` | Web UI for managing the compose stacks | `dockhand:3000` |
 | [Uptime Kuma](https://github.com/louislam/uptime-kuma) | `uptime-kuma` | Uptime monitoring | `uptime-kuma:3001` |
-| [Backrest](https://github.com/garethgeorge/backrest) | `backrest` | Restic backup UI, backs up `/opt/docker` read-only | `backrest:9898` |
+| [Backrest](https://github.com/garethgeorge/backrest) | `backrest` | Restic backup UI, backs up `/opt/docker` read-only. The repository is on the HDD | `backrest:9898` |
 | [Nextcloud AIO](https://github.com/nextcloud/all-in-one) | `nextcloud-aio` | Files, photos and office suite | AIO admin on host `8080`; Apache on host `11000` |
 | [Immich](https://immich.app) | `immich` | Photo library with ML (OpenVINO), plus [immich-drop](https://github.com/nasogaa/immich-drop) for guest uploads | `immich_server:2283`, `immich_drop:8080` |
 | [Navidrome](https://www.navidrome.org) | `navidrome` | Music streaming, plus [AudioMuse-AI](https://github.com/NeptuneHub/AudioMuse-AI) and `radio-relay` (re-streams HLS-only radio stations as MP3 for Navidrome's radio list, built locally) | `navidrome:4533`, `audiomuse-flask:8000`, `radio-relay:8080` |
@@ -49,7 +66,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 | [BentoPDF](https://github.com/alam00000/bentopdf) | `bentopdf` | Client-side PDF toolkit | `bentopdf:8080` |
 | [SnapOtter](https://hub.docker.com/r/snapotter/snapotter) | `snapotter` | AI image editing (iGPU) | `snapotter:1349` |
 | [GPTWOL](https://github.com/Misterbabou/gptwol) | `gptwol` | Wake-on-LAN web UI | host `5000` |
-| Smart Plug | `smart-plug` | Local web UI for a Tuya (LSC) smart plug: switching, schedules, energy stats; built locally | `smart-plug:8080` |
+| Smart Plug | `smart-plug` | Local web UI for Tuya (LSC) smart plugs: switching, schedules, energy stats. Image built from [ayhamo/LSC-Smart-Plug](https://github.com/ayhamo/LSC-Smart-Plug) | `smart-plug:8080` |
 | EVE.js | `evejs` | Private game server, deployed with `manage.sh` from a release zip | host `26000`–`26003`, `5222`, `40110`–`40111` |
 | W101 server | `w101server` | Private game server ([Imlight](https://github.com/Revive101/Imlight)), built with `setup.sh` | host `12000`, `12333`, `12500` |
 
@@ -78,12 +95,15 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 | 02:55 | Wardrowbe database dump, 7 days kept (`wardrowbe/backup-db.sh`) | user crontab |
 | 03:05 | Host config copy: all of `/etc` (no password hashes), every crontab, `/usr/local` scripts, public SSH keys, package lists and a system summary into `/opt/docker/host-config` (root only), so Backrest backs up the host's setup too; pushes to the Kuma monitor "Host config copy" ([`scripts/host-config-backup.sh`](docker/scripts/host-config-backup.sh), installed in `/usr/local/sbin`) | root crontab |
 | 03:15 | Backrest backup of `/opt/docker` (7 daily, 4 weekly, 6 monthly) | Backrest |
-| 04:00 | rclone: Backrest repository → Google Drive | root crontab |
+| 04:00 | rclone: Backrest repository (`/mnt/hdd/backrest-backup`) → Google Drive | root crontab |
 | 04:20 (03:20) | Nextcloud AIO backup to `/mnt/hdd/nextcloud-backup` | Nextcloud AIO (UTC) |
 | 05:00 | rclone: Nextcloud AIO backup → Google Drive | root crontab |
+| 05:10 | Disk health: SMART, NVMe wear and btrfs errors → Kuma monitor "Home disk health" ([`scripts/disk-health.sh`](docker/scripts/disk-health.sh)) | root crontab |
 | Mon 05:15 | radio-relay: tests the relay (health, every station, Navidrome → relay); on the first Monday of the month it first rebuilds it with `--pull` (newest Alpine, ffmpeg, Python) and rolls back if the test fails. Pushes to the Kuma monitor "Radio relay check" (8-day interval) ([`navidrome/radio-relay-rebuild.sh`](docker/navidrome/radio-relay-rebuild.sh)) | user crontab |
 | 05:30 | Backup check: Immich, SparkyFitness and Floppy dumps, the Backrest snapshot and the Nextcloud AIO backup must be under 26 h old; each reports to its own Uptime Kuma push monitor (`scripts/backup-check.sh`) | user crontab |
-| Weekly | `apt upgrade` | by hand |
+| 06:00–07:00 | Debian security updates (`unattended-upgrades`, no reboot, with a Snapper snapshot before and after) | apt timer |
+| 07:30 and at boot | Reboot check → Kuma monitor "Home reboot needed" ([`scripts/reboot-needed.sh`](docker/scripts/reboot-needed.sh)) | root crontab |
+| Weekly | `apt upgrade` for everything else | by hand |
 
 ## Things you must adapt
 

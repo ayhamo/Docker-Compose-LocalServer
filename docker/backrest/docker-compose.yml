@@ -18,6 +18,7 @@ services:
 
     volumes:
       - ./data:/data
+      - /mnt/hdd/backrest-backup:/data/docker-backup   # restic repo on the HDD, not the SSD
       - ./config:/config
       - ./cache:/cache
       # - ./tmp:/tmp # [optional] path for temporary files

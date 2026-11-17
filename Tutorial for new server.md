@@ -40,6 +40,31 @@ Only these ports are published on the host. Everything else stays internal on `p
 
 ## 1. Install Docker and prepare the host
 
+### 1.0 Filesystem (optional): btrfs with compression
+
+The home server's root SSD runs btrfs with zstd compression. Docker's data compresses about 1.5:1, and each subvolume can be snapshotted on its own. It's optional, and everything below also works on ext4. The easiest way is to pick btrfs in the Debian installer's partitioning step. Converting an existing ext4 install works like this:
+
+1. Boot a Debian Live USB and copy the root partition to another disk: `rsync -aHAXS --numeric-ids`, then verify with a dry run that lists no differences.
+2. Run `mkfs.btrfs -L debian -U <old root UUID> <root partition>`. Reusing the UUID keeps GRUB's EFI stub and other references valid.
+3. Create the subvolumes `@`, `@home`, `@opt-docker`, `@containerd`, `@docker`, `@log` and `@swap`. Mount them at `/`, `/home`, `/opt/docker`, `/var/lib/containerd`, `/var/lib/docker`, `/var/log` and `/swap`, then copy the system back.
+4. Make the swapfile: `btrfs filesystem mkswapfile --size 8g /swap/swapfile`.
+5. Write one `fstab` line per subvolume, for example:
+   ```
+   UUID=<uuid> /           btrfs subvol=@,compress=zstd:1,noatime           0 0
+   UUID=<uuid> /opt/docker btrfs subvol=@opt-docker,compress=zstd:1,noatime 0 0
+   /swap/swapfile none swap sw 0 0
+   ```
+6. In a chroot, run:
+   ```
+   update-initramfs -u -k all
+   grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram --force-extra-removable
+   update-grub
+   ```
+   - `update-grub` adds `rootflags=subvol=@` by itself.
+   - `--force-extra-removable` also updates `EFI/BOOT`, which some laptops (the Acer here) boot from. To keep that copy current on later GRUB updates, after the first boot run `echo "grub-efi-amd64 grub2/force_efi_extra_removable boolean true" | sudo debconf-set-selections && sudo dpkg-reconfigure -f noninteractive grub-efi-amd64`.
+   - Set `RESUME=none` in `/etc/initramfs-tools/conf.d/resume` if no swap partition exists. Otherwise every boot waits for it.
+7. After the first boot, apps that check their database file's identity may refuse to start because the file was copied. Floppy is one; fix it with `docker exec floppy python manage.py sqlite_startup --prepare-migrations`.
+
 ### 1.1 Docker
 
 ```bash
@@ -50,20 +75,70 @@ newgrp docker          # or log out and back in
 docker compose version
 ```
 
-### 1.2 Global Docker settings: log rotation and DNS
+### 1.2 Global Docker settings: log rotation, DNS and live-restore
 
-Every container gets small rotated logs. Containers also resolve DNS through AdGuard, with `1.1.1.1` as fallback while AdGuard is down.
+- **Logs:** every container gets small rotated logs.
+- **DNS:** containers resolve through AdGuard, with `1.1.1.1` as fallback while AdGuard is down.
+- **live-restore:** containers keep running while the Docker daemon restarts, for example during an apt upgrade of Docker. Tested 2026-11-17: after `systemctl restart docker`, the containers kept their start times.
 
 ```bash
 sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
 {
   "log-driver": "local",
   "log-opts": { "max-size": "2m", "max-file": "2" },
-  "dns": ["<SERVER-IP>", "1.1.1.1"]
+  "dns": ["<SERVER-IP>", "1.1.1.1"],
+  "live-restore": true
 }
 EOF
 sudo systemctl restart docker
 ```
+
+### 1.2a Host tuning (optional)
+
+- **zswap.** Swapped-out pages are first compressed in RAM, which means fewer SSD writes and faster swap-in. zstd is a module on Debian's kernel, so it's set by a tmpfiles rule at boot instead of a kernel parameter:
+  ```bash
+  sudo cp docker/scripts/zswap.conf /etc/tmpfiles.d/ && sudo systemd-tmpfiles --create /etc/tmpfiles.d/zswap.conf
+  ```
+- **UDP GRO forwarding for Tailscale.** Only needed if the server is a Tailscale exit node or subnet router ([Tailscale's advice](https://tailscale.com/kb/1320/performance-best-practices)). Put your network card's name in the unit first: `ip -o route get 1.1.1.1` shows it after `dev`. Then:
+  ```bash
+  sudo cp docker/scripts/udp-gro-forwarding.service /etc/systemd/system/ && sudo systemctl enable --now udp-gro-forwarding
+  ```
+- **Snapper** (btrfs only, see 1.0). It takes automatic snapshots of `/` and `/opt/docker`:
+  ```bash
+  sudo apt install snapper
+  sudo snapper -c root create-config / && sudo snapper -c opt-docker create-config /opt/docker
+  sudo snapper -c root set-config TIMELINE_LIMIT_HOURLY=0 TIMELINE_LIMIT_DAILY=7 TIMELINE_LIMIT_WEEKLY=4 TIMELINE_LIMIT_MONTHLY=0 TIMELINE_LIMIT_YEARLY=0 NUMBER_LIMIT=10
+  sudo snapper -c opt-docker set-config TIMELINE_LIMIT_HOURLY=6 TIMELINE_LIMIT_DAILY=7 TIMELINE_LIMIT_WEEKLY=4 TIMELINE_LIMIT_MONTHLY=0 TIMELINE_LIMIT_YEARLY=0 NUMBER_LIMIT=5
+  ```
+  - Debian's package also snapshots `/` before and after every apt run, and once at each boot.
+  - Add `/opt/docker/.snapshots` to Backrest's excludes, or every backup includes all the snapshots again.
+  - To restore one app, copy its folder back from a snapshot: `sudo snapper -c opt-docker list`, then `sudo cp -a /opt/docker/.snapshots/<N>/snapshot/<app> /opt/docker/` (stop the app first).
+- **TCP: BBR, no slow start after idle, smaller send queue.** BBR keeps the speed up on lossy, far-away connections (phones on mobile data, abroad); the other two keep reused connections fast:
+  ```bash
+  echo tcp_bbr | sudo tee /etc/modules-load.d/bbr.conf && sudo modprobe tcp_bbr
+  echo "net.ipv4.tcp_congestion_control = bbr" | sudo tee /etc/sysctl.d/90-bbr.conf
+  printf 'net.ipv4.tcp_slow_start_after_idle = 0\nnet.ipv4.tcp_notsent_lowat = 16384\n' | sudo tee /etc/sysctl.d/90-tcp-tuning.conf
+  sudo sysctl -p /etc/sysctl.d/90-bbr.conf /etc/sysctl.d/90-tcp-tuning.conf
+  ```
+  - Containers inherit BBR when they start, but not the other two settings; NPM sets them under `sysctls:` in its compose file. Restart NPM afterwards.
+  - Test BBR before keeping it: on a clean line it gains nothing. Run iperf3 between two containers with `tc qdisc ... netem delay 50ms rate 50mbit loss 0.1%` on both, once with `-C cubic` and once with `-C bbr`.
+- **Backrest repository on a second disk.** Keep the restic repository off the disk it backs up. In `backrest/docker-compose.yml` the line `- /mnt/hdd/backrest-backup:/data/docker-backup` mounts it over the repo path, so Backrest's settings stay the same. Create the folder first (`sudo mkdir -p /mnt/hdd/backrest-backup && sudo chown 1000:1000 /mnt/hdd/backrest-backup`). To move an existing repo, stop Backrest, `sudo rsync -aHAX --numeric-ids` the old `data/docker-backup/` into it, check with `restic check`, then remove the old copy.
+- **Security updates.** Debian security updates only, no automatic reboot:
+  ```bash
+  sudo apt install unattended-upgrades
+  sudo tee /etc/apt/apt.conf.d/52homelab-unattended >/dev/null <<'EOF'
+  #clear Unattended-Upgrade::Origins-Pattern;
+  Unattended-Upgrade::Origins-Pattern {
+          "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+          "origin=Debian,codename=${distro_codename},label=Debian-Security";
+  };
+  Unattended-Upgrade::Automatic-Reboot "false";
+  Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+  EOF
+  printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' | sudo tee /etc/apt/apt.conf.d/20auto-upgrades
+  sudo unattended-upgrade --dry-run -d | grep "Allowed origins"
+  ```
+  `reboot-needed.sh` (step 6) reports when an update needs a reboot.
 
 ### 1.3 Free port 53 (Ubuntu only)
 
@@ -272,6 +347,20 @@ sudo mkdir -p /var/log/cron-logs
 ```
 
 To rebuild a server from it, restore `/opt/docker/host-config` from Backrest and follow its `README.txt`.
+
+Two more root jobs send alerts through Uptime Kuma push monitors (25-hour interval each): disk health (SMART of every disk, NVMe wear, btrfs error counters) and a pending-reboot check after the security updates. `disk-health.sh` needs `smartmontools`:
+
+```bash
+sudo install -m 755 /opt/docker/scripts/disk-health.sh /opt/docker/scripts/reboot-needed.sh /usr/local/sbin/
+```
+
+```cron
+# Disk health -> Kuma "Home disk health" (down = a disk problem, with details)
+10 5 * * * /usr/local/sbin/disk-health.sh "https://uptimekuma.yourdomain.dedyn.io/api/push/<TOKEN>" >> /var/log/cron-logs/disk-health.log 2>&1
+# Pending reboot -> Kuma "Home reboot needed" (down = reboot needed, with the packages)
+30 7 * * * /usr/local/sbin/reboot-needed.sh "https://uptimekuma.yourdomain.dedyn.io/api/push/<TOKEN>"
+@reboot sleep 120; /usr/local/sbin/reboot-needed.sh "https://uptimekuma.yourdomain.dedyn.io/api/push/<TOKEN>"
+```
 
 ---
 

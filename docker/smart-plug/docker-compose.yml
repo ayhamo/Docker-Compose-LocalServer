@@ -5,18 +5,8 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # Built locally from the Dockerfile next to this file. There is no registry
-    # copy, so Dockhand / Watchtower cannot see updates for it. To update
-    # Python, Flask and tinytuya, rebuild (pulls the newest base image and
-    # installs the newest package releases allowed by requirements.txt):
-    #   docker compose build --pull --no-cache && docker compose up -d
-    # To use the image from GitHub instead (built by .github/workflows/docker.yml),
-    # replace "build: ." with:
-    #   image: ghcr.io/<your-user>/lsc-smart-plug:latest
-    build: .
-    image: smart-plug:local
-    labels:
-      - dockhand.update=false   # local build: nothing to check in a registry
+    # Image built by GitHub Actions from ayhamo/lsc-smart-plug (amd64 + arm64)
+    image: ghcr.io/ayhamo/lsc-smart-plug:latest
     container_name: smart-plug
     restart: unless-stopped
     environment:
@@ -29,7 +19,7 @@ services:
     # ports:
     #   - "8085:8080"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/status"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/info"]
       interval: 600s
       timeout: 5s
       retries: 3

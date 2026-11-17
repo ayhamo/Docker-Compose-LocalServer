@@ -26,7 +26,12 @@ services:
 
     networks:
       - proxy-net
-      
+    # NPM sends every web page and song to remote clients. Each container has its own
+    # network settings, so the host's /etc/sysctl.d values don't reach it (BBR does).
+    sysctls:
+      net.ipv4.tcp_slow_start_after_idle: 0    # keep the speed after pauses between requests
+      net.ipv4.tcp_notsent_lowat: 16384        # HTTP/2 can send urgent parts (CSS, JS) first
+
     depends_on:
       - error-pages
 
