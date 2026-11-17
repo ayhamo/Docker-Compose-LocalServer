@@ -35,7 +35,7 @@ Setting up a fresh machine? Follow **[Tutorial for new server.md](Tutorial%20for
 - **Host tuning** (tutorial step 1.2a), tested 2026-11-17 including a reboot:
   - **zswap with zstd** in front of the swapfile ([`scripts/zswap.conf`](docker/scripts/zswap.conf) in `/etc/tmpfiles.d`).
   - **UDP GRO forwarding for Tailscale** ([`scripts/udp-gro-forwarding.service`](docker/scripts/udp-gro-forwarding.service), enabled), because home is an exit node and subnet router.
-  - **Docker `live-restore`:** containers keep running while the Docker daemon restarts.
+  - **No Docker `live-restore`** (tried on 2026-11-17, removed the same day): with it, containers survive a Docker update, but every container that mounts the Docker socket (Dockhand, Nextcloud AIO mastercontainer and HaRP) keeps the old, dead socket and needs a restart. Without it, a Docker update simply restarts all containers.
   - **TCP BBR** (`/etc/sysctl.d/90-bbr.conf`, `tcp_bbr` in `/etc/modules-load.d/bbr.conf`). Benchmarked 2026-11-17 in containers with a 100 ms round trip and a 50 Mbit/s limit, like the upload to Kuwait: the same speed as CUBIC on a clean path, 47 against 9 Mbit/s with 0.1% packet loss and 46 against 1.6 Mbit/s with 1%.
   - **`tcp_slow_start_after_idle = 0` and `tcp_notsent_lowat = 16384`** (`/etc/sysctl.d/90-tcp-tuning.conf`): connections keep their speed after a pause, and HTTP/2 can send urgent parts first. A container gets its own copy of these settings, so NPM, which sends every page to remote clients, sets them again under `sysctls:` in its compose file. BBR does carry into containers.
   - **AdGuard `upstream_mode: parallel`:** asks Cloudflare and Quad9 at once and uses the first answer (uncached lookups 21 ms on average instead of 25, worst case 35 ms instead of 67).

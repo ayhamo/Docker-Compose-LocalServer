@@ -6,6 +6,19 @@ http:
         customRequestHeaders:
           Remote-User: ""
           X-Nd-Proxy-User-<RANDOM_HEX>: ""
+    compress:             # on every request (entrypoint): zstd/br/gzip for text only; replies an app already compressed are left alone
+      compress:
+        includedContentTypes:   # never music, video or pictures (already compressed, would only cost CPU)
+          - text/html
+          - text/css
+          - text/plain
+          - text/xml
+          - text/javascript
+          - application/javascript
+          - application/json
+          - application/xml
+          - application/manifest+json
+          - image/svg+xml
     show-403:
       replacePath:
         path: "/403.html"

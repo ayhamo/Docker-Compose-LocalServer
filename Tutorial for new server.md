@@ -75,19 +75,18 @@ newgrp docker          # or log out and back in
 docker compose version
 ```
 
-### 1.2 Global Docker settings: log rotation, DNS and live-restore
+### 1.2 Global Docker settings: log rotation and DNS
 
 - **Logs:** every container gets small rotated logs.
 - **DNS:** containers resolve through AdGuard, with `1.1.1.1` as fallback while AdGuard is down.
-- **live-restore:** containers keep running while the Docker daemon restarts, for example during an apt upgrade of Docker. Tested 2026-11-17: after `systemctl restart docker`, the containers kept their start times.
+- **No live-restore:** it keeps containers running while Docker restarts, but containers that mount `/var/run/docker.sock` (Dockhand, Nextcloud AIO) then keep the old socket and lose Docker until they are restarted. Here a Docker update restarts all containers instead.
 
 ```bash
 sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
 {
   "log-driver": "local",
   "log-opts": { "max-size": "2m", "max-file": "2" },
-  "dns": ["<SERVER-IP>", "1.1.1.1"],
-  "live-restore": true
+  "dns": ["<SERVER-IP>", "1.1.1.1"]
 }
 EOF
 sudo systemctl restart docker

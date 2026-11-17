@@ -1,6 +1,6 @@
 # Oracle Cloud VM (Always Free)
 
-A second, public-facing server next to the home server: an Oracle Cloud **Always Free** ARM VM (2 OCPU, 12 GB RAM, 100 GB disk, Ubuntu 24.04 aarch64). It hosts what has to stay up or face the internet (the public Pangolin gateway with Pocket ID login, which also publishes chosen home apps; Uptime Kuma watching home) while the home server keeps the data. Compose files live under [`docker/`](docker/), which mirrors `/opt/docker/` on the VM.
+A second, public-facing server next to the home server: an Oracle Cloud **Always Free** ARM VM (2 OCPU, 12 GB RAM, 50 GB btrfs boot disk, Ubuntu 24.04 aarch64). It hosts what has to stay up or face the internet (the public Pangolin gateway with Pocket ID login, which also publishes chosen home apps; Uptime Kuma watching home) while the home server keeps the data. Compose files live under [`docker/`](docker/), which mirrors `/opt/docker/` on the VM.
 
 ## Security layout
 
@@ -48,7 +48,8 @@ Both block at the firewall, before a request reaches Traefik. Neither touches SS
 - **[`docker/pangolin`](docker/pangolin/)**: `pangolin` (dashboard, API, rules) and `traefik` (ports 80/443; 80 only redirects to HTTPS). Traefik joins `proxy-net` and reaches apps by container name. `config/config.yml` holds Pangolin's `server.secret` (it can't come from `.env`), so it is mode 600, like its database `config/db/db.sqlite` (users, sessions, the encrypted OIDC secret); Pangolin runs as root inside its container and still reads both.
 - **Secrets:** every stack here keeps passwords and keys in its own `.env` (600, git-ignored; `.env.example` shows the names) and the compose files only reference `${VAR}`. Moved on 2026-10-29 with the resolved `docker compose config` checked identical before and after, so no container changed.
 - **No tunnels.** Pangolin's own tunnel parts (Gerbil, Newt) are not installed. Home is reached over Tailscale, and Pangolin's VPN uses the same `100.64.0.0/10` range as Tailscale, which clashes on Linux. The `gerbil:` block in `config.yml` only satisfies Pangolin's config check.
-- **Certificate.** Traefik gets `*.yourdomain.dedyn.io` from Let's Encrypt by DNS-01 through deSEC (token in `.env`) and renews it about 30 days before expiry. The deSEC token `oracle-traefik-acme` may only write the TXT records `_acme-challenge` and `_acme-challenge.oracle-pangolin` (the dashboard has its own cert), may not create or delete domains, and only works from the VM's public IP; everything else is read-only (tested: other records `403`, other IPs `401`). `LEGO_DISABLE_CNAME_SUPPORT=true` stays set: it was needed while the wildcard was a CNAME, which would have sent the `_acme-challenge` record to the apex. The Badger plugin is pinned to `v1.7.0`, because `v1.8.0` failed Traefik's plugin integrity check.
+- **Certificate.** Traefik gets `*.yourdomain.dedyn.io` from Let's Encrypt by DNS-01 through deSEC (token in `.env`) and renews it about 30 days before expiry. The deSEC token `oracle-traefik-acme` may only write the TXT records `_acme-challenge` and `_acme-challenge.oracle-pangolin` (the dashboard has its own cert), may not create or delete domains, and only works from the VM's public IP; everything else is read-only (tested: other records `403`, other IPs `401`). `LEGO_DISABLE_CNAME_SUPPORT=true` stays set: it was needed while the wildcard was a CNAME, which would have sent the `_acme-challenge` record to the apex. Pangolin rewrites `traefik_config.yml` when it updates (it drops the comments and sets the Badger plugin version itself, `v1.8.0` since 4 Nov). The keys added here survive that.
+- **Compression and TCP.** A `compress` middleware on the HTTPS entry point sends text replies (HTML, CSS, JS, JSON, XML, SVG) as zstd, Brotli or gzip, and leaves music, video, pictures and anything an app already compressed alone. Pocket ID's login page went from 5.9 KB to 1.4 KB. Traefik's compose sets `tcp_slow_start_after_idle = 0` and `tcp_notsent_lowat = 16384` under `sysctls:`, because a container doesn't take them from the host (BBR it does).
 - **[`docker/pocket-id`](docker/pocket-id/)**: no published port. Traefik routes it from [`dynamic_config.yml`](docker/pangolin/config/traefik/dynamic_config.yml), not as a Pangolin resource, so the login never depends on the gate it feeds. Back up its `ENCRYPTION_KEY`: without it Pocket ID can't read its data. Traefik carries a Docker network alias with Pocket ID's name, so Pangolin reaches Pocket ID directly inside Docker when it checks a login, whatever public DNS says.
 - **Pocket ID → Pangolin.** OIDC client "Pangolin" (callback `https://oracle-pangolin.yourdomain.dedyn.io/auth/idp/*/oidc/callback`, access *All Users*; the default "selected groups" with no group denies everyone). In Pangolin, identity provider "Pocket ID" with identifier `preferred_username` and auto-provisioning: your own username becomes Admin, everyone else Member (`preferred_username == '<you>' && 'Admin' || 'Member'`). A Member sees only the apps given to the Member role.
 
@@ -104,12 +105,12 @@ Published (2026-10-29), all **Admin role only** except BentoPDF (also Member). T
 
 To publish another app: Pangolin resource (as above), a line in `http_top.conf` plus `nginx -s reload` in the NPM container, the AdGuard self-rewrite and the home-only rule. To unpublish, undo the three.
 
-## Navidrome (music, moving here from home)
+## Navidrome (no music on the VM)
 
 [`docker/navidrome`](docker/navidrome/) is the home stack with two changes: `user: "1001:1001"` (the VM's `ubuntu`) and the library in `./music` on the VM. It runs everything home runs: Navidrome with its plugins, AudioMuse-AI (Flask, worker, Postgres; the image has ARM builds) and `radio-relay` (built here from [`../docker/navidrome/radio-relay`](../docker/navidrome/radio-relay/)).
 
 - **Copied from home on 2026-10-28:** Navidrome's database (users, playlists, play counts, radios, plugin settings) through SQLite's online backup, the plugins, the radio images, `.env` (Last.fm keys), and AudioMuse's database through `pg_dump` / `pg_restore` (Postgres data files are not portable between x86 and ARM). Not copied: music, `artwork/hashed` and `cache` (rebuilt on demand).
-- **Music not there yet.** A full scan marks every song *missing* instead of deleting it, so playlists, play counts and AudioMuse's matches come back when the files arrive at the same paths.
+- **Music moved off the VM on 2026-11-17**, so the VM fits a 50 GB disk. The library (43 GB, 4,523 files, including a `Youtube FLAC` folder of 15 GB that home doesn't have) is one tar file on Google Drive in `System & Backups/Local Server Backup/oracle-music (Navidrome)`, checked by MD5 after the upload. `./music` is empty. A scan marks every song *missing* instead of deleting it, so playlists, play counts and AudioMuse's matches come back if the files return at the same paths.
 - **Public access:** see *Admin links* above (`/rest` past Pocket ID with a rate limit).
 - **AudioMuse UI:** `oracle-audiomuse.yourdomain.dedyn.io`, a plain Traefik router (not a Pangolin resource) with `tailscale-only`: Tailscale or home only, everyone else gets the styled 403. AudioMuse has no login of its own. Home AdGuard has a self-rewrite for the name, like the other `oracle-*` links.
 
@@ -135,6 +136,17 @@ The home Dockhand manages this VM through [Hawser](docker/hawser/) in standard m
 - **Hawser itself stays untracked**: redeploying the agent through itself would cut its own connection, and its token would need a copy at home. Update it over SSH.
 - **Not behind the gateway.** Hawser stays on the Tailscale IP only.
 
+## Disk (btrfs, 50 GB)
+
+Moved on 2026-11-17 from a 150 GB ext4 boot volume to a 50 GB one with btrfs and zstd compression.
+
+- **How.** Oracle can make a boot volume bigger but not smaller. So: *Replace boot volume* with a fresh Ubuntu image at 50 GB (keeping the old volume), replace it back, and attach the new volume to the running VM as a second disk. Then, with Docker stopped: `mkfs.btrfs`, the subvolumes, `rsync -aHAXx` of `/` (without the music) and `/boot`, an fstab by UUID, and in a chroot `update-initramfs`, `grub-install --no-nvram` and `update-grub`. Last, *Replace boot volume* with the new one. About 40 minutes of downtime, and the old volume stayed ready as the undo until the checks and a test reboot passed.
+- **Layout:** the same subvolumes as home without the swap one: `@` (/), `@home`, `@opt-docker`, `@containerd`, `@docker`, `@log`, all `compress=zstd:1,noatime`. `/boot` (ext4) and the EFI partition stay separate, so GRUB never reads btrfs. 31.7 GB of files take 22 GB.
+- **Speed:** Oracle's *balanced* volumes get 60 IOPS and 480 KB/s per GB, so 50 GB gives about 3,000 IOPS and 24 MB/s (150 GB gave about 72 MB/s). The VM's services barely use the disk. Image pulls and backups take longer.
+- **Free storage:** the VM uses 50 of the 200 GB of Always Free block storage.
+- **Snapper,** with the same limits as home: `/` keeps 7 daily and 4 weekly snapshots plus one before and after every apt run and one at each boot. `/opt/docker` keeps 6 hourly, 7 daily and 4 weekly. Backrest excludes `/opt/docker/.snapshots`.
+- **Swap:** 4 GB of compressed swap in RAM (zram with zstd, `systemd-zram-generator`), no swap on disk. `vm.page-cluster = 0` in `/etc/sysctl.d/90-zram.conf`.
+
 ## Scheduled jobs (Oracle VM)
 
 All times Europe/Berlin, read from the VM's timers and crontab. The slots match the home server ([schedule](../README.md#scheduled-jobs-home-server)): checks and cleanups at 01:00, database copies 03:00, backup 03:15, upload 04:00. OS updates install only after the backup and upload. All OS updates install themselves (the home server installs only security updates by itself), because nobody logs in here every week, but the VM never reboots by itself: a Discord alert says when a reboot is due, and I run `sudo reboot`. Rows marked *planned* are added as services move in.
@@ -147,7 +159,7 @@ All times Europe/Berlin, read from the VM's timers and crontab. The slots match 
 | 02:00 | apt: download package lists | systemd `apt-daily.timer` |
 | 03:00 | Database copies: consistent `.snapshot` copies of the 6 SQLite databases (Pocket ID, Pangolin, Kuma, Navidrome, CrowdSec, CrowdSec Web UI `state.db`) through SQLite's online backup, no container stop ([`host/oracle-db-snapshots.py`](host/oracle-db-snapshots.py)) | root crontab |
 | 03:05 | Host config copy into `/opt/docker/host-config`, same script as home ([`host-config-backup.sh`](../docker/scripts/host-config-backup.sh), in `/usr/local/sbin`); pushes to Oracle's Kuma monitor "Host config copy" | root crontab |
-| 03:15 | Backrest: backup of `/opt/docker` (music, caches and Traefik's access logs excluded: Subsonic apps put the login token in the URL); keeps 7 daily, 4 weekly, 6 monthly; prune and check on the 1st at 00:00 ([`docker/backrest`](docker/backrest/)) | Backrest |
+| 03:15 | Backrest: backup of `/opt/docker` (Snapper snapshots, caches and Traefik's access logs excluded: Subsonic apps put the login token in the URL); keeps 7 daily, 4 weekly, 6 monthly; prune and check on the 1st at 00:00 ([`docker/backrest`](docker/backrest/)) | Backrest |
 | 04:00 | Upload of the Backrest repo to Google Drive (`System & Backups/Local Server Backup/oracle-backup (Backrest)`), only if tonight's database copies and backup exist ([`host/oracle-gdrive-upload.sh`](host/oracle-gdrive-upload.sh)); pushes up to Oracle's Kuma monitor "Oracle Backup → GDrive", or down with the reason (also logged) when it skips | root crontab |
 | 04:15 | Unattended upgrades: Ubuntu security and regular updates; old kernels and unused packages removed | systemd `apt-daily-upgrade.timer` |
 | 05:00, and 90 s after boot | Reboot check: if an update needs a reboot (`/var/run/reboot-required`), pushes down to Oracle's Kuma monitor "Oracle reboot needed" with the packages, so Discord gets the alert; otherwise up ([`host/reboot-needed.sh`](host/reboot-needed.sh), copied to `/opt/docker`). No automatic reboot | user crontab |
@@ -155,6 +167,7 @@ All times Europe/Berlin, read from the VM's timers and crontab. The slots match 
 | Mon 01:10 | GeoIP: refresh the DE and KW country lists and re-apply the 80/443 rule | systemd `geoip-allow-update.timer` |
 | Every 5 min | Home IP trust: home's internet IP (`yourdomain.dedyn.io`, no subdomain) counts like Tailscale, so admin pages open from home and Pangolin lets home through without its login. When the IP changes, the old `/32` is swapped for the new one in Traefik's rules, Pangolin's resource rules and CrowdSec's `homelab` allowlist ([`host/home-ip-trust.py`](host/home-ip-trust.py)) | root crontab |
 | Every 60 s | Uptime Kuma checks the home internet (public DoT port); the home server pushes a heartbeat every minute, and checks Oracle's gateway for home Kuma | Uptime Kuma, home crontab |
+| Hourly | Snapper snapshots of `/` and `/opt/docker`, and the cleanup of old ones | systemd `snapper-timeline.timer`, `snapper-cleanup.timer` |
 | Weekly (Mon, random time) | SSD trim | systemd `fstrim.timer` |
 | Daily | Traefik checks its certificates and renews them about 30 days before expiry | Traefik (Pangolin) |
 | Continuous | Tailscale updates itself | Tailscale |
@@ -176,6 +189,23 @@ AllowUsers ubuntu
 # Homelab: BBR instead of CUBIC (benchmarked 2026-11-13, Oracle -> home over Tailscale: about 10% slower at 250 Mbit/s
 # on a clean path, 3-7x faster with 0.1% loss and 35x with 1% loss, as on mobile data). Queue stays fq_codel (10-bufferbloat.conf).
 net.ipv4.tcp_congestion_control = bbr
+```
+
+`/etc/sysctl.d/90-tcp-tuning.conf`, the same file as home (since 2026-11-17)
+```
+# Homelab: keep the TCP send speed after idle pauses (music, page loads over reused connections).
+net.ipv4.tcp_slow_start_after_idle = 0
+# Homelab: queue less unsent data per socket, so HTTP/2 can send urgent parts (CSS, JS) first.
+net.ipv4.tcp_notsent_lowat = 16384
+```
+
+`/etc/systemd/zram-generator.conf`
+```
+# Homelab: 4 GB compressed swap in RAM (zstd). Oracle has no disk swap; a memory spike swaps here instead of killing a container.
+[zram0]
+zram-size = 4096
+compression-algorithm = zstd
+swap-priority = 100
 ```
 
 `/etc/apt/apt.conf.d/52homelab-unattended`
@@ -216,10 +246,10 @@ net.ipv4.ip_nonlocal_bind = 1
 {
   "log-driver": "local",
   "log-opts": { "max-size": "2m", "max-file": "2" },
-  "no-new-privileges": true,
-  "live-restore": true
+  "no-new-privileges": true
 }
 ```
+No `live-restore` since 2026-11-17, the same as home: with it, Hawser kept the old, dead Docker socket after a Docker update.
 
 `/etc/iptables/rules.v4`: changes to Oracle's image defaults
 ```diff
