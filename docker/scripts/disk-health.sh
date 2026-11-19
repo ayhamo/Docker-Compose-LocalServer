@@ -4,6 +4,8 @@
 # Checks: SMART overall health and the early-failure counters of every disk, NVMe wear,
 # and the btrfs error counters of the root filesystem (read/write/checksum errors).
 # The first argument is the Kuma push URL (kept in the cron line).
+# Cron runs with PATH=/usr/bin:/bin; smartctl lives in /usr/sbin.
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 problems=""
 summary=""
 add() { problems="${problems:+$problems; }$1"; }

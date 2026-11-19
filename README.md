@@ -80,7 +80,7 @@ All times Europe/Berlin, checked against the jobs' real run times. Apps that sch
 
 | When | Job | Runs from |
 |---|---|---|
-| Every 30 min (:13, :43) | deSEC DynDNS update of the home IP, with an Uptime Kuma heartbeat | root crontab |
+| Every 30 min (:13, :43) | deSEC DynDNS update of the home IP, with an Uptime Kuma heartbeat. If the IPv4 or IPv6 lookup fails, it sends `preserve` for that address: deSEC deletes a record when the value is empty, which removed the IPv4 record on 2026-11-18 while the server's network link kept dropping | root crontab |
 | Every minute | Oracle gateway check: opens Pangolin's dashboard on the VM and pushes to the home Kuma monitor "Oracle gateway (Pangolin)" (replaced the phone DNS failover, `scripts/dns-failover.py`, kept on disk) | user crontab |
 | Every minute | Heartbeat to the Uptime Kuma on the Oracle VM (silence there = home down) | user crontab |
 | 00:00 Mon–Fri (23:00 Sun–Thu) | Sure: stock price import | Sure (UTC) |

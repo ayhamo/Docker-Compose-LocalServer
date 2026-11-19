@@ -27,5 +27,5 @@ check() {  # <monitor name> <glob of the backup files>
 check "Immich DB Dump"       "/opt/docker/immich/library/backups/immich-db-backup-*.sql.gz"
 check "SparkyFitness Backup" "/opt/docker/sparky-fitness/backup/sparkyfitness_full_backup_*.tar.gz"
 check "Floppy DB Snapshot"   "/opt/docker/floppy/backups/database/db-*.sqlite3"
-check "Backrest Backup"      "/opt/docker/backrest/data/docker-backup/snapshots/*"
+check "Backrest Backup"      "/mnt/hdd/backrest-backup/snapshots/*"   # repo on the HDD since 2026-11-17
 check "Nextcloud AIO Backup" "/mnt/hdd/nextcloud-backup/borg/index.*"
